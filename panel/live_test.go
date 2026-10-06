@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"github.com/snowarch/mak1zu/persona"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -240,5 +242,81 @@ func TestExpressionPermissionsAreOptIn(t *testing.T) {
 	}
 	if strings.Contains(base, "9074192534592") {
 		t.Fatal("default link carries the broad permissions")
+	}
+}
+
+func TestFaceFollowsMoodThenMoments(t *testing.T) {
+	now := time.Date(2026, 10, 6, 15, 0, 0, 0, time.UTC)
+	mood := func(n string, i float64) persona.MoodState { return persona.MoodState{Name: n, Intensity: i} }
+	ev := func(typ, reason string, ago time.Duration) *events.Event {
+		return &events.Event{Type: typ, Reason: reason, TS: now.Add(-ago)}
+	}
+	cases := []struct {
+		name   string
+		m      persona.MoodState
+		paused bool
+		last   *events.Event
+		want   string
+	}{
+		{"baseline", mood("neutral", 0), false, nil, "neutral"},
+		{"mild amusement", mood("amused", 0.4), false, nil, "amused"},
+		{"strong amusement is smug", mood("amused", 0.9), false, nil, "smug"},
+		{"mild irritation is deadpan", mood("irritated", 0.4), false, nil, "deadpan"},
+		{"strong irritation", mood("irritated", 0.9), false, nil, "irritated"},
+		{"sleepy", mood("sleepy", 0.5), false, nil, "sleepy"},
+		{"wired", mood("wired", 0.5), false, nil, "wired"},
+		{"paused sleeps", mood("wired", 1), true, nil, "sleepy"},
+		{"fresh incident", mood("neutral", 0), false, ev("incident", "misconfigured", 2*time.Second), "alarm"},
+		{"old incident is forgotten", mood("neutral", 0), false, ev("incident", "misconfigured", time.Minute), "neutral"},
+		{"incident beats pause", mood("neutral", 0), true, ev("incident", "x", time.Second), "alarm"},
+		{"just replied", mood("neutral", 0), false, ev("replied", "", time.Second), "amused"},
+		{"chose not to answer", mood("neutral", 0), false, ev("quiet", "dice", time.Second), "deadpan"},
+	}
+	for _, tc := range cases {
+		if got := Face(tc.m, tc.paused, tc.last, now); got != tc.want {
+			t.Errorf("%s: got %s want %s", tc.name, got, tc.want)
+		}
+	}
+	night := time.Date(2026, 10, 6, 3, 0, 0, 0, time.UTC)
+	if got := Face(mood("neutral", 0), false, &events.Event{Type: "heard", Reason: "mention", TS: night.Add(-time.Second)}, night); got != "embarrassed" {
+		t.Errorf("woken at night: %s", got)
+	}
+}
+
+func TestFaceOnlyReturnsContractNames(t *testing.T) {
+	ok := map[string]bool{}
+	for _, n := range FaceNames {
+		ok[n] = true
+	}
+	now := time.Now()
+	for _, n := range []string{"neutral", "amused", "irritated", "sleepy", "wired", "bogus"} {
+		for _, in := range []float64{0, 0.5, 1} {
+			for _, p := range []bool{false, true} {
+				if f := Face(persona.MoodState{Name: n, Intensity: in}, p, nil, now); !ok[f] {
+					t.Fatalf("%s/%v/%v -> %q is not in the contract", n, in, p, f)
+				}
+			}
+		}
+	}
+}
+
+func TestAvatarRouteIs404UntilArtIsWired(t *testing.T) {
+	s, _ := newServer(t)
+	if w := do(s, "GET", "/avatar/neutral.png", "", nil); w.Code != 404 {
+		t.Fatalf("no art wired yet, got %d", w.Code)
+	}
+	s.Avatar = func(name string, size int) ([]byte, bool) {
+		if name == "smug" {
+			return []byte("PNG" + strconv.Itoa(size)), true
+		}
+		return nil, false
+	}
+	if w := do(s, "GET", "/avatar/smug.png?size=96", "", nil); w.Code != 200 || w.Body.String() != "PNG96" || w.Header().Get("Content-Type") != "image/png" {
+		t.Fatalf("%d %q", w.Code, w.Body)
+	}
+	for _, p := range []string{"/avatar/evil.png", "/avatar/..%2fsecret", "/avatar/shy.png"} {
+		if w := do(s, "GET", p, "", nil); w.Code != 404 {
+			t.Errorf("%s -> %d", p, w.Code)
+		}
 	}
 }

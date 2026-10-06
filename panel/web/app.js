@@ -377,13 +377,22 @@ views.memory=async()=>{
 };
 
 /* ---------- chrome ---------- */
+const noArt=new Set();
+function faceEl(){
+  const lamp=()=>h('span',{class:'lamp'});
+  if(!S.has_avatar)return lamp();
+  const name=noArt.has(S.face)?'neutral':S.face;
+  if(noArt.has(name))return lamp();
+  return h('img',{class:'face',alt:'',src:'avatar/'+name+'.png?size=96',title:'she looks '+S.face,
+    onerror:e=>{noArt.add(name);e.target.replaceWith(lamp())}});
+}
 async function go(t){tab=t;ls.set('tab',t);history.replaceState(null,'','#'+t);await render()}
 function paintHeader(){
   const t=TABS.find(x=>x[0]===tab)||TABS[0];
   $('#title').textContent=t[1];$('#sub').textContent=t[2];
   const off=!S.config.discord.enabled;
   const st=$('#state');st.className='state'+(S.paused?' paused':off?' off':'');
-  st.replaceChildren(h('span',{class:'lamp'}),h('span',{},S.paused?'paused: listening, not talking':(off?'terminal only':'awake')+' · '+(S.mood||'steady')));
+  st.replaceChildren(faceEl(),h('span',{},S.paused?'paused: listening, not talking':(off?'terminal only':'awake')+' · '+(S.mood||'steady')));
   const sp=$('#stamp');sp.textContent=S.paused?'resume':'pause';sp.className='stamp'+(S.paused?' on':'');
   $('#ver').textContent=S.active+' · v'+(S.version||'dev');
   $('#foot').textContent='up '+fmtUp(S.uptime_s||0);

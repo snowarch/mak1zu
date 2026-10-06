@@ -45,8 +45,10 @@ type Server struct {
 	Mood      func() string
 	MoodState func() persona.MoodState
 	Preview   func(ctx context.Context, speaker string, convo []engine.PreviewTurn) (engine.PreviewResult, error)
-	Version   string
-	Started   time.Time
+	// Avatar returns the pre-rendered expression PNG at a size, when artwork is wired in.
+	Avatar  func(name string, size int) ([]byte, bool)
+	Version string
+	Started time.Time
 	// Test seam: build a client for the provider test button.
 	NewClient func(name string, p config.Provider) provider.Client
 }
@@ -62,6 +64,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/persona", s.putPersona)
 	mux.HandleFunc("POST /api/persona/activate", s.activate)
 	mux.HandleFunc("GET /api/telemetry", s.telemetry)
+	mux.HandleFunc("GET /avatar/{name}", s.avatar)
 	mux.HandleFunc("GET /api/schema", s.schema)
 	mux.HandleFunc("GET /api/presets", s.presets)
 	mux.HandleFunc("POST /api/provider/add", s.addProvider)
@@ -165,7 +168,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		up = int64(time.Since(s.Started).Seconds())
 	}
 	writeJSON(w, 200, map[string]any{
-		"paused": cfg.Behavior.Paused, "mood": mood, "mood_state": ms, "uptime_s": up, "version": s.Version,
+		"paused": cfg.Behavior.Paused, "mood": mood, "mood_state": ms, "face": Face(ms, cfg.Behavior.Paused, s.lastMoment(), time.Now()), "has_avatar": s.Avatar != nil, "uptime_s": up, "version": s.Version,
 		"invite_url": InviteURL(cfg.Discord.BotToken(), false), "invite_url_expressions": InviteURL(cfg.Discord.BotToken(), true),
 		"checklist": Checklist(cfg), "activity": s.recentActivity(),
 		"config": cfg.Redacted(), "personas": s.Lib().List(), "active": cfg.Persona.Active,

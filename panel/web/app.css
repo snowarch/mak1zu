@@ -43,6 +43,7 @@ small,.mut{color:var(--mut)}
 .state .lamp{width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}
 .state.paused .lamp{background:var(--shu);box-shadow:0 0 0 3px color-mix(in srgb,var(--shu) 25%,transparent)}
 .state.off .lamp{background:var(--mut);box-shadow:none}
+.face{width:44px;height:44px;border-radius:50%;object-fit:cover;border:1px solid var(--line);background:var(--card)}
 .stamp{width:54px;height:54px;border-radius:50%;border:2px solid var(--shu);background:none;color:var(--shu);font:700 10px/1.1 var(--mono);letter-spacing:.08em;text-transform:uppercase;position:relative;transition:.15s}
 .stamp::after{content:"";position:absolute;inset:3px;border:1px solid var(--shu);border-radius:50%;opacity:.5}
 .stamp:hover{transform:rotate(-6deg) scale(1.04)}
