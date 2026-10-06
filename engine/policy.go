@@ -48,29 +48,29 @@ func (r Reason) Human() string {
 	case ReasonTask:
 		return "someone asked for a reminder or a search"
 	case ReasonAmbient:
-		return "she felt like joining in"
+		return "nobody called her. she jumped in anyway"
 	case ReasonPeer:
 		return "a bot friend spoke in her home channel"
 	case ReasonCeiling:
-		return "she hit her replies-per-minute limit"
+		return "hit her per-minute cap. out of words for now"
 	case ReasonMentionOnly:
-		return "mention-only channel and nobody @mentioned her"
+		return "mention-only room, no @. she stays out of it"
 	case ReasonPaused:
-		return "she is paused"
+		return "paused. she heard it and kept her mouth shut"
 	case ReasonOtherServer:
-		return "not one of her servers"
+		return "not her server. none of her business"
 	case ReasonBotIgnored:
-		return "a bot she does not talk to"
+		return "a bot she does not talk to. ignored"
 	case ReasonPeerLimit:
-		return "she already traded enough lines with the bots"
+		return "enough bot banter. she is done"
 	case ReasonOwnerOnly:
-		return "a DM from someone who is not her owner"
+		return "DM from a stranger. not answering"
 	case ReasonNotHome:
-		return "nobody called her and this is not a home channel"
+		return "not her room and nobody called her. stayed out"
 	case ReasonCooldown:
-		return "she spoke a moment ago and is letting the room breathe"
+		return "just spoke. letting it breathe"
 	case ReasonDice:
-		return "she heard it and chose not to answer"
+		return "heard it. said nothing"
 	}
 	return string(r)
 }

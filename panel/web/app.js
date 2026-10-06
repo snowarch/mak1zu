@@ -196,7 +196,7 @@ views.live=()=>{
     h('span',{id:'livebadge'}));
   feedBox=h('div',{class:'feed'});
   const rows=FEED.filter(matches).slice(-300).reverse().map(feedRow);
-  feedBox.append(...(rows.length?rows:[h('div',{class:'empty'},'Quiet in here. Say something in a room she lives in, or try her in Talk.')]));
+  feedBox.append(...(rows.length?rows:[h('div',{class:'empty'},'Nothing yet. She will not start the conversation. Say something in a room she lives in, or try her in Talk.')]));
   setTimeout(()=>setLive(liveState),0);
   return [todo,stats,bar,feedBox];
 };
@@ -208,7 +208,7 @@ views.talk=()=>{
   const sys=h('pre',{class:'sys'},lastSystem||'Send a message and the exact prompt she received shows up here.');
   const speaker=h('input',{type:'text',value:sessionStorage.getItem('spk')||'You',style:'max-width:170px',onchange:e=>sessionStorage.setItem('spk',e.target.value)});
   const box=h('textarea',{placeholder:'Say something to her. Enter sends, Shift+Enter adds a line.',onkeydown:e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}});
-  const draw=()=>{chat.replaceChildren(...(convo.length?convo.map(m=>h('div',{class:'msg '+m.role},m.text,m.meta?h('span',{class:'meta'},m.meta):'')):[h('div',{class:'empty'},'Nothing yet. Whatever you type goes through the same prompt she uses on Discord, minus tools and memory.')]));chat.scrollTop=chat.scrollHeight;sessionStorage.setItem('convo',JSON.stringify(convo.slice(-40)))};
+  const draw=()=>{chat.replaceChildren(...(convo.length?convo.map(m=>h('div',{class:'msg '+m.role},m.text,m.meta?h('span',{class:'meta'},m.meta):'')):[h('div',{class:'empty'},'Say something. It goes through her real prompt, minus tools and memory.')]));chat.scrollTop=chat.scrollHeight;sessionStorage.setItem('convo',JSON.stringify(convo.slice(-40)))};
   async function send(){
     const t=box.value.trim();if(!t)return;box.value='';
     convo.push({role:'you',text:t});draw();
@@ -407,7 +407,7 @@ async function render(){
 }
 async function refreshState(){S=await api('GET','/api/state');paintHeader();onState?.()}
 $('#stamp').onclick=async()=>{
-  try{await applyEdit('behavior.paused',!S.paused);await refreshState();toast(S.paused?'Paused. She still listens, she says nothing.':'She is back.');if(tab==='dials')go('dials')}catch(e){toast(e.message,1)}
+  try{await applyEdit('behavior.paused',!S.paused);await refreshState();toast(S.paused?'Paused. She is still listening. She just will not say anything.':'Back.');if(tab==='dials')go('dials')}catch(e){toast(e.message,1)}
 };
 (async()=>{
   try{
@@ -415,5 +415,5 @@ $('#stamp').onclick=async()=>{
     const recent=await api('GET','/api/events/recent');recent.forEach(e=>{lastEvt=Math.max(lastEvt,e.id);FEED.push(e)});
     if(!views[tab])tab='live';
     await render();stream();setInterval(()=>refreshState().catch(()=>{}),12000);
-  }catch(e){$('#main').replaceChildren(h('div',{class:'card'},'Cannot reach the panel API: '+e.message))}
+  }catch(e){$('#main').replaceChildren(h('div',{class:'card'},'Cannot reach her. Is she running? ('+e.message+')'))}
 })();
