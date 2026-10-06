@@ -17,6 +17,7 @@ import (
 	"github.com/snowarch/mak1zu/config"
 	"github.com/snowarch/mak1zu/guard"
 	"github.com/snowarch/mak1zu/home"
+	"github.com/snowarch/mak1zu/internal/events"
 	"github.com/snowarch/mak1zu/internal/telemetry"
 	"github.com/snowarch/mak1zu/memory"
 	"github.com/snowarch/mak1zu/persona"
@@ -39,6 +40,7 @@ type Engine struct {
 	Tr    sdk.Transport
 	Tools *tools.Registry
 	Tel   *telemetry.Log
+	Ev    *events.Hub
 	Pol   *Policy
 	Inc   *Incidents
 	Log   *slog.Logger
@@ -58,7 +60,7 @@ type Engine struct {
 func New(cfg *config.Store, llm Completer, mem *memory.Store, lib persona.Library, tr sdk.Transport) *Engine {
 	e := &Engine{
 		Cfg: cfg, LLM: llm, Mem: mem, Lib: lib, Tr: tr,
-		Tools: tools.NewRegistry(), Tel: telemetry.New(500, ""), Pol: NewPolicy(), Inc: NewIncidents(),
+		Tools: tools.NewRegistry(), Tel: telemetry.New(500, ""), Ev: events.NewHub(300), Pol: NewPolicy(), Inc: NewIncidents(),
 		Log:  slog.Default(),
 		mood: persona.NewMood(), seen: map[string]time.Time{}, locks: map[string]*sync.Mutex{},
 		seq: map[string]uint64{}, recent: map[string][]string{},
@@ -164,6 +166,7 @@ func (e *Engine) Handle(ctx context.Context, m sdk.Message) {
 		e.mood.Observe(m.AuthorName, m.Content, m.Mentioned || m.IsDM)
 	}
 	ok, reason := e.Pol.Decide(m, cfg, pa.Name)
+	e.heard(m, cfg, ok, reason)
 	if !ok {
 		return
 	}
@@ -201,6 +204,7 @@ func (e *Engine) Handle(ctx context.Context, m sdk.Message) {
 		cause := Classify(out.err, out.verdict)
 		e.Inc.Record(m.ChannelID, cause, "")
 		e.Tel.Add(telemetry.Record{Kind: "incident", Persona: pa.ID, Channel: m.ChannelID, Cause: string(cause), Detail: errString(out.err)})
+		e.Ev.Emit(events.Event{Type: "incident", Place: placeOf(m), Reason: string(cause), Why: cause.Human(), Text: errString(out.err)})
 		// Retry once, silently, but only if nothing with side effects ran and
 		// the conversation has not moved on.
 		moved := func() bool { e.mu.Lock(); defer e.mu.Unlock(); return e.seq[m.ChannelID] != mine }()
@@ -435,6 +439,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	}
 	e.Tel.Add(telemetry.Record{Kind: "turn", Persona: pa.ID, Channel: m.ChannelID, Provider: resp.Provider, Model: resp.Model,
 		Latency: time.Since(start).Seconds(), Words: len(strings.Fields(final)), Robotic: guard.RoboticHits(final), Tools: toolsUsed, Rounds: rounds})
+	e.replied(m, cfg, final, resp, time.Since(start), toolsUsed)
 	if cfg.Memory.AutoExtract && memoryCandidate(m.Content) {
 		if !slicesContains(toolsUsed, "remember") { // the model already saved it on purpose
 			go e.extractMemories(context.WithoutCancel(ctx), pa, m)
@@ -531,4 +536,46 @@ func slicesContains(l []string, s string) bool {
 		}
 	}
 	return false
+}
+
+func placeOf(m sdk.Message) string {
+	if m.IsDM {
+		return "DM"
+	}
+	return strings.TrimSpace("#" + m.ChannelName + " · " + m.GuildName)
+}
+
+func preview(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
+}
+
+// heard publishes the decision for one inbound message: the reason she woke
+// up, or the reason she did not.
+func (e *Engine) heard(m sdk.Message, cfg config.Config, spoke bool, why Reason) {
+	if why == ReasonOtherServer {
+		return // not her room: not worth a line in the feed
+	}
+	t := "quiet"
+	if spoke {
+		t = "heard"
+	}
+	text := preview(m.Content, 160)
+	if cfg.WebUI.HideMessages {
+		text = ""
+	}
+	e.Ev.Emit(events.Event{Type: t, Place: placeOf(m), Author: m.AuthorName, Text: text, Reason: string(why), Why: why.Human()})
+}
+
+func (e *Engine) replied(m sdk.Message, cfg config.Config, final string, resp provider.Response, took time.Duration, toolsUsed []string) {
+	text := preview(final, 600)
+	if cfg.WebUI.HideMessages {
+		text = ""
+	}
+	model := strings.Trim(resp.Provider+" / "+resp.Model, " /")
+	e.Ev.Emit(events.Event{Type: "replied", Place: placeOf(m), Text: text, Words: len(strings.Fields(final)),
+		Latency: took.Milliseconds(), Model: model, Tools: toolsUsed})
 }

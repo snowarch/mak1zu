@@ -22,10 +22,67 @@ const (
 	ReasonTask        Reason = "task"
 	ReasonAmbient     Reason = "ambient"
 	ReasonPeer        Reason = "peer"
-	ReasonSkip        Reason = "skip"
 	ReasonCeiling     Reason = "rate_ceiling"
 	ReasonMentionOnly Reason = "mention_only_channel"
+	ReasonPaused      Reason = "paused"
+	ReasonOtherServer Reason = "other_server"
+	ReasonBotIgnored  Reason = "bot_ignored"
+	ReasonPeerLimit   Reason = "peer_limit"
+	ReasonOwnerOnly   Reason = "owner_only_dm"
+	ReasonNotHome     Reason = "not_home"
+	ReasonCooldown    Reason = "cooldown"
+	ReasonDice        Reason = "dice"
 )
+
+// Human says why, in a sentence the panel can show as is.
+func (r Reason) Human() string {
+	switch r {
+	case ReasonDM:
+		return "private message from her owner"
+	case ReasonMention:
+		return "she was @mentioned"
+	case ReasonReply:
+		return "someone replied to her message"
+	case ReasonName:
+		return "someone said her name"
+	case ReasonTask:
+		return "someone asked for a reminder or a search"
+	case ReasonAmbient:
+		return "she felt like joining in"
+	case ReasonPeer:
+		return "a bot friend spoke in her home channel"
+	case ReasonCeiling:
+		return "she hit her replies-per-minute limit"
+	case ReasonMentionOnly:
+		return "mention-only channel and nobody @mentioned her"
+	case ReasonPaused:
+		return "she is paused"
+	case ReasonOtherServer:
+		return "not one of her servers"
+	case ReasonBotIgnored:
+		return "a bot she does not talk to"
+	case ReasonPeerLimit:
+		return "she already traded enough lines with the bots"
+	case ReasonOwnerOnly:
+		return "a DM from someone who is not her owner"
+	case ReasonNotHome:
+		return "nobody called her and this is not a home channel"
+	case ReasonCooldown:
+		return "she spoke a moment ago and is letting the room breathe"
+	case ReasonDice:
+		return "she heard it and chose not to answer"
+	}
+	return string(r)
+}
+
+// Spoke reports whether the reason is one that leads to a reply.
+func (r Reason) Spoke() bool {
+	switch r {
+	case ReasonDM, ReasonMention, ReasonReply, ReasonName, ReasonTask, ReasonAmbient, ReasonPeer:
+		return true
+	}
+	return false
+}
 
 // Direct reasons are "being called": they bypass ambient cooldowns and
 // outrank burst coalescing.
@@ -80,6 +137,9 @@ func (p *Policy) Decide(m sdk.Message, cfg config.Config, self string) (bool, Re
 	defer p.mu.Unlock()
 	now := p.now()
 	d, r := cfg.Discord, cfg.Behavior.Response
+	if cfg.Behavior.Paused {
+		return false, ReasonPaused
+	}
 	if m.WebhookID != "" && contains(d.HumanWebhooks, m.WebhookID) {
 		m.IsBot = false // a bridged or scripted human
 	}
@@ -103,11 +163,11 @@ func (p *Policy) Decide(m sdk.Message, cfg config.Config, self string) (bool, Re
 			p.lastReply[m.ChannelID] = now
 			return true, why
 		}
-		return false, ReasonSkip
+		return false, ReasonDice
 	}
 
 	if len(d.OnlyGuilds) > 0 && m.GuildID != "" && !contains(d.OnlyGuilds, m.GuildID) {
-		return false, ReasonSkip // not one of her servers
+		return false, ReasonOtherServer
 	}
 
 	home := contains(d.HomeChannels, m.ChannelID)
@@ -115,13 +175,13 @@ func (p *Policy) Decide(m sdk.Message, cfg config.Config, self string) (bool, Re
 	// Peer bots: ambient banter only in home channels, bounded.
 	if m.IsBot {
 		if !contains(d.PeerBots, m.AuthorID) || !home || contains(d.MentionOnly, m.ChannelID) {
-			return false, ReasonSkip
+			return false, ReasonBotIgnored
 		}
 		if r.MaxPeerExchanges > 0 && p.peerCount[m.ChannelID] >= r.MaxPeerExchanges {
-			return false, ReasonSkip
+			return false, ReasonPeerLimit
 		}
 		if t, ok := p.lastPeer[m.ChannelID]; ok && now.Sub(t).Seconds() < r.PeerCooldownSecs {
-			return false, ReasonSkip
+			return false, ReasonPeerLimit
 		}
 		ok, why := accept(roll(r.Chances.Peer), ReasonPeer)
 		if ok {
@@ -136,7 +196,7 @@ func (p *Policy) Decide(m sdk.Message, cfg config.Config, self string) (bool, Re
 	// DMs: only the owner, unless no owner is configured (single-user install).
 	if m.IsDM {
 		if d.OwnerID != "" && m.AuthorID != d.OwnerID {
-			return false, ReasonSkip
+			return false, ReasonOwnerOnly
 		}
 		return accept(true, ReasonDM)
 	}
@@ -163,16 +223,16 @@ func (p *Policy) Decide(m sdk.Message, cfg config.Config, self string) (bool, Re
 		return accept(roll(r.Chances.NameInMessage), ReasonName)
 	}
 	if len(d.Allowed) > 0 && !contains(d.Allowed, m.ChannelID) && !home {
-		return false, ReasonSkip
+		return false, ReasonNotHome
 	}
 	if !home {
-		return false, ReasonSkip // never free-talk outside home channels
+		return false, ReasonNotHome // never free-talk outside home channels
 	}
 	if r.HomeAlwaysReply {
 		return accept(true, ReasonAmbient)
 	}
 	if t, ok := p.lastReply[m.ChannelID]; ok && now.Sub(t).Seconds() < r.AmbientCooldown {
-		return false, ReasonSkip
+		return false, ReasonCooldown
 	}
 	active := false
 	if t, ok := p.lastReply[m.ChannelID]; ok && now.Sub(t).Seconds() < r.RecentActiveSecs {

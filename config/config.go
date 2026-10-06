@@ -84,6 +84,8 @@ type Behavior struct {
 	Timing   Timing   `json:"timing"`
 	Turn     Turn     `json:"turn"`
 	Retry    bool     `json:"retry_transient"`
+	// Paused is the kill switch: she hears everything and answers nothing.
+	Paused bool `json:"paused"`
 }
 
 type Persona struct {
@@ -128,6 +130,8 @@ type WebUI struct {
 	Host    string `json:"host"`
 	Port    int    `json:"port"`
 	Token   string `json:"token,omitempty"` // required when Host is not loopback
+	// HideMessages keeps what people said out of the live feed.
+	HideMessages bool `json:"hide_messages"`
 }
 
 type Search struct {

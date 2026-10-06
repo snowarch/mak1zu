@@ -51,18 +51,39 @@ func Classify(err error, v guard.Verdict) Cause {
 	return CauseInternal
 }
 
+// Human describes the cause for the panel, to the person who runs her.
+func (c Cause) Human() string {
+	switch c {
+	case CauseProviderDown:
+		return "the model provider did not answer"
+	case CauseRateLimit:
+		return "the provider says she is out of quota or going too fast"
+	case CauseMisconfig:
+		return "the provider rejected the key, model or request"
+	case CauseEmpty:
+		return "the model answered with nothing"
+	case CauseVision:
+		return "someone sent an image and the model cannot see images"
+	case CauseProtocol:
+		return "the model leaked internals instead of a reply, so she did not send it"
+	case CauseUnmetPromise:
+		return "she said she did something she did not do"
+	}
+	return "something broke inside her"
+}
+
 // Transient causes are worth one automatic retry of a recent direct turn.
 func (c Cause) Transient() bool {
 	return c == CauseProviderDown || c == CauseEmpty || c == CauseRateLimit
 }
 
 var messages = map[Cause][2]string{ // {en, es}
-	CauseProviderDown: {"my brain provider is down right now, try me again in a minute", "mi proveedor de IA está caído ahora mismo, probame de nuevo en un minuto"},
-	CauseRateLimit:    {"i hit a rate limit, give me a minute", "me pasé del límite de uso, dame un minuto"},
-	CauseMisconfig:    {"something's misconfigured on my side (key or model), the owner needs to look at it", "algo está mal configurado de mi lado (clave o modelo), tiene que mirarlo el dueño"},
-	CauseEmpty:        {"i went blank on that one, say it again?", "me quedé en blanco con esa, ¿me lo repetís?"},
+	CauseProviderDown: {"my brain provider is down right now, try me again in a minute", "mi proveedor de IA está caído ahora mismo, prueba de nuevo en un minuto"},
+	CauseRateLimit:    {"i hit a rate limit, give me a minute", "superé el límite de uso, dame un minuto"},
+	CauseMisconfig:    {"something's misconfigured on my side (key or model), the owner needs to look at it", "algo está mal configurado de mi lado (clave o modelo), tiene que revisarlo el dueño"},
+	CauseEmpty:        {"i went blank on that one, say it again?", "me quedé en blanco con esa, ¿me lo repites?"},
 	CauseVision:       {"i can't see images with the model i'm running on right now", "con el modelo que tengo ahora no puedo ver imágenes"},
-	CauseProtocol:     {"that came out wrong on my end, ask me again", "eso me salió mal, preguntame de nuevo"},
+	CauseProtocol:     {"that came out wrong on my end, ask me again", "eso me salió mal, pregúntame de nuevo"},
 	CauseInternal:     {"something broke on my side, i logged it", "algo se rompió de mi lado, quedó registrado"},
 }
 
