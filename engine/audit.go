@@ -35,6 +35,7 @@ func (e *Engine) audit(m sdk.Message, reply string, toolsUsed []string, files in
 	}
 	e.Inc.Record(m.ChannelID, CauseUnmetPromise, gap)
 	e.Tel.Add(telemetry.Record{Kind: "incident", Channel: m.ChannelID, Cause: string(CauseUnmetPromise), Detail: gap})
+	e.slip(m, "unmet_promise", CauseUnmetPromise.Human())
 }
 
 // selfReview is the review_myself tool: her recent replies, tics and open

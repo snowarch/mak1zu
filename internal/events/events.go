@@ -12,12 +12,13 @@ import (
 type Event struct {
 	ID      int64     `json:"id"`
 	TS      time.Time `json:"ts"`
-	Type    string    `json:"type"` // heard | quiet | replied | incident | system
+	Type    string    `json:"type"` // heard | quiet | replied | incident | slip | system
 	Place   string    `json:"place,omitempty"`
 	Author  string    `json:"author,omitempty"`
 	Text    string    `json:"text,omitempty"`   // what was said (preview)
 	Reason  string    `json:"reason,omitempty"` // machine id, e.g. mention
 	Why     string    `json:"why,omitempty"`    // the same, in words
+	First   bool      `json:"first,omitempty"`  // first time she has heard from this person
 	Words   int       `json:"words,omitempty"`
 	Latency int64     `json:"latency_ms,omitempty"`
 	Model   string    `json:"model,omitempty"`

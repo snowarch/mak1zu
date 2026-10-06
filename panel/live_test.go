@@ -273,12 +273,12 @@ func TestFaceFollowsMoodThenMoments(t *testing.T) {
 		{"chose not to answer", mood("neutral", 0), false, ev("quiet", "dice", time.Second), "deadpan"},
 	}
 	for _, tc := range cases {
-		if got := Face(tc.m, tc.paused, tc.last, now); got != tc.want {
+		if got := Face(tc.m, tc.paused, false, tc.last, now); got != tc.want {
 			t.Errorf("%s: got %s want %s", tc.name, got, tc.want)
 		}
 	}
 	night := time.Date(2026, 10, 6, 3, 0, 0, 0, time.UTC)
-	if got := Face(mood("neutral", 0), false, &events.Event{Type: "heard", Reason: "mention", TS: night.Add(-time.Second)}, night); got != "embarrassed" {
+	if got := Face(mood("neutral", 0), false, false, &events.Event{Type: "heard", Reason: "mention", TS: night.Add(-time.Second)}, night); got != "embarrassed" {
 		t.Errorf("woken at night: %s", got)
 	}
 }
@@ -292,7 +292,7 @@ func TestFaceOnlyReturnsContractNames(t *testing.T) {
 	for _, n := range []string{"neutral", "amused", "irritated", "sleepy", "wired", "bogus"} {
 		for _, in := range []float64{0, 0.5, 1} {
 			for _, p := range []bool{false, true} {
-				if f := Face(persona.MoodState{Name: n, Intensity: in}, p, nil, now); !ok[f] {
+				if f := Face(persona.MoodState{Name: n, Intensity: in}, p, p, nil, now); !ok[f] {
 					t.Fatalf("%s/%v/%v -> %q is not in the contract", n, in, p, f)
 				}
 			}
@@ -318,5 +318,44 @@ func TestAvatarRouteIs404UntilArtIsWired(t *testing.T) {
 		if w := do(s, "GET", p, "", nil); w.Code != 404 {
 			t.Errorf("%s -> %d", p, w.Code)
 		}
+	}
+}
+
+func TestFaceNewFacesAndSadness(t *testing.T) {
+	now := time.Date(2026, 10, 6, 15, 0, 0, 0, time.UTC)
+	m := persona.MoodState{Name: "neutral"}
+	ev := func(typ string, first bool, ago time.Duration) *events.Event {
+		return &events.Event{Type: typ, First: first, Reason: "mention", TS: now.Add(-ago)}
+	}
+	if f := Face(m, false, false, ev("heard", true, time.Second), now); f != "shy" {
+		t.Errorf("stranger: %s", f)
+	}
+	if f := Face(m, false, false, ev("heard", true, 10*time.Second), now); f != "neutral" {
+		t.Errorf("shyness should pass: %s", f)
+	}
+	if f := Face(m, false, false, ev("slip", false, time.Second), now); f != "waitwait" {
+		t.Errorf("caught herself: %s", f)
+	}
+	if f := Face(m, false, true, nil, now); f != "sad" {
+		t.Errorf("all models down: %s", f)
+	}
+	if f := Face(m, false, false, nil, now); f != "neutral" {
+		t.Errorf("recovered should clear sadness: %s", f)
+	}
+}
+
+func TestAllDownNeedsEveryRoutedProviderCooling(t *testing.T) {
+	cfg := config.Default()
+	cfg.LLM.Providers["b"] = config.Provider{Enabled: true}
+	cfg.LLM.Routing.Text = []string{"main", "b"}
+	if allDown(cfg, map[string]float64{"main": 20}) {
+		t.Fatal("b is healthy, she can still think")
+	}
+	if !allDown(cfg, map[string]float64{"main": 20, "b": 5}) {
+		t.Fatal("both cooling means down")
+	}
+	cfg.LLM.Routing.Text = nil
+	if allDown(cfg, nil) {
+		t.Fatal("no providers is a setup problem, not sadness")
 	}
 }

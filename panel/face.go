@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/snowarch/mak1zu/config"
 	"github.com/snowarch/mak1zu/internal/events"
 	"github.com/snowarch/mak1zu/persona"
 )
@@ -15,15 +16,22 @@ import (
 var FaceNames = []string{"neutral", "shy", "deadpan", "smug", "amused", "irritated", "sleepy", "wired", "alarm", "embarrassed", "waitwait", "sad"}
 
 // Face picks her expression from what she feels and what just happened.
-// Priority: a recent problem, the pause switch, a recent moment, then mood.
-func Face(m persona.MoodState, paused bool, last *events.Event, now time.Time) string {
+// Priority: a fresh incident, every model down, the pause switch, a recent
+// moment (new face, caught herself, woken at night, replied, chose silence), then mood.
+func Face(m persona.MoodState, paused, down bool, last *events.Event, now time.Time) string {
 	if last != nil {
 		age := now.Sub(last.TS)
 		switch {
 		case last.Type == "incident" && age < 10*time.Second:
 			return "alarm"
+		case down:
+			return "sad"
 		case paused:
 			return "sleepy"
+		case last.Type == "slip" && age < 3*time.Second:
+			return "waitwait"
+		case last.Type == "heard" && last.First && age < 4*time.Second:
+			return "shy"
 		case last.Type == "heard" && age < 5*time.Second && (last.Reason == "mention" || last.Reason == "dm") && now.Hour() < 5:
 			return "embarrassed" // woken at night
 		case last.Type == "replied" && age < 5*time.Second:
@@ -31,6 +39,9 @@ func Face(m persona.MoodState, paused bool, last *events.Event, now time.Time) s
 		case last.Type == "quiet" && last.Reason == "dice" && age < 4*time.Second:
 			return "deadpan"
 		}
+	}
+	if down {
+		return "sad"
 	}
 	if paused {
 		return "sleepy"
@@ -89,4 +100,20 @@ func (s *Server) avatar(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.Write(b)
+}
+
+// allDown is true when every provider she could answer with is cooling off
+// after failures: she has no working brain right now.
+func allDown(cfg config.Config, cooling map[string]float64) bool {
+	n := 0
+	for _, name := range cfg.LLM.Routing.Text {
+		if p, ok := cfg.LLM.Providers[name]; !ok || !p.Enabled {
+			continue
+		}
+		n++
+		if cooling[name] <= 0 {
+			return false
+		}
+	}
+	return n > 0
 }

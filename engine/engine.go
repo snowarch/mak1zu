@@ -166,7 +166,8 @@ func (e *Engine) Handle(ctx context.Context, m sdk.Message) {
 		e.mood.Observe(m.AuthorName, m.Content, m.Mentioned || m.IsDM)
 	}
 	ok, reason := e.Pol.Decide(m, cfg, pa.Name)
-	e.heard(m, cfg, ok, reason)
+	first := ok && e.firstContact(ctx, pa.ID, m.AuthorID)
+	e.heard(m, cfg, ok, reason, first)
 	if !ok {
 		return
 	}
@@ -373,6 +374,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 		if v != guard.OK {
 			if regen > 0 && !out.sideEffects {
 				regen--
+				e.slip(m, "rewrite", "the draft was unusable, she rewrote it")
 				text, out.err = e.regenerate(ctx, req, "[system: your last draft was unusable. Answer the person again, in chat style.]")
 				if out.err != nil {
 					return out
@@ -387,6 +389,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 		e.mu.Unlock()
 		if hits := guard.RoboticHits(cleaned); len(hits) > 0 && regen > 0 && !out.sideEffects {
 			regen--
+			e.slip(m, "rewrite", "the draft sounded like customer support, she rewrote it")
 			text, out.err = e.regenerate(ctx, req, "[system: that draft sounded like customer support. Rewrite it as yourself, like a person typing in chat.]")
 			if out.err != nil {
 				return out
@@ -395,6 +398,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 		}
 		if guard.IsLoop(cleaned, recent) && regen > 0 && !out.sideEffects {
 			regen--
+			e.slip(m, "rewrite", "she was about to repeat herself, so she rewrote it")
 			text, out.err = e.regenerate(ctx, req, "[system: that is almost word for word something you already said here. Say something new, shorter, or just react.]")
 			if out.err != nil {
 				return out
@@ -555,7 +559,7 @@ func preview(s string, n int) string {
 
 // heard publishes the decision for one inbound message: the reason she woke
 // up, or the reason she did not.
-func (e *Engine) heard(m sdk.Message, cfg config.Config, spoke bool, why Reason) {
+func (e *Engine) heard(m sdk.Message, cfg config.Config, spoke bool, why Reason, first bool) {
 	if why == ReasonOtherServer {
 		return // not her room: not worth a line in the feed
 	}
@@ -567,7 +571,7 @@ func (e *Engine) heard(m sdk.Message, cfg config.Config, spoke bool, why Reason)
 	if cfg.WebUI.HideMessages {
 		text = ""
 	}
-	e.Ev.Emit(events.Event{Type: t, Place: placeOf(m), Author: m.AuthorName, Text: text, Reason: string(why), Why: why.Human()})
+	e.Ev.Emit(events.Event{Type: t, Place: placeOf(m), Author: m.AuthorName, Text: text, Reason: string(why), Why: why.Human(), First: first})
 }
 
 func (e *Engine) replied(m sdk.Message, cfg config.Config, final string, resp provider.Response, took time.Duration, toolsUsed []string) {
@@ -578,4 +582,15 @@ func (e *Engine) replied(m sdk.Message, cfg config.Config, final string, resp pr
 	model := strings.Trim(resp.Provider+" / "+resp.Model, " /")
 	e.Ev.Emit(events.Event{Type: "replied", Place: placeOf(m), Text: text, Words: len(strings.Fields(final)),
 		Latency: took.Milliseconds(), Model: model, Tools: toolsUsed})
+}
+
+// firstContact reports whether she has never talked with this person.
+func (e *Engine) firstContact(ctx context.Context, personaID, userID string) bool {
+	r, err := e.Mem.Relationship(ctx, personaID, userID)
+	return err == nil && r.Interactions == 0
+}
+
+// slip marks a moment where she caught herself: a rewrite or a broken promise.
+func (e *Engine) slip(m sdk.Message, reason, why string) {
+	e.Ev.Emit(events.Event{Type: "slip", Place: placeOf(m), Reason: reason, Why: why})
 }

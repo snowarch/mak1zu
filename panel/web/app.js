@@ -114,13 +114,13 @@ function settingsCard(id,{advanced=false}={}){
 
 /* ---------- live feed ---------- */
 const FEED=[];let lastEvt=0,feedFilter=sessionStorage.getItem('ff')||'all',liveState='connecting';
-const GLYPH={heard:'›',replied:'↳',quiet:'·',incident:'!',system:'~'};
+const GLYPH={heard:'›',replied:'↳',quiet:'·',incident:'!',slip:'?',system:'~'};
 function matches(e){
   switch(feedFilter){
     case'replied':return e.type==='replied';
     case'heard':return e.type==='heard'||e.type==='replied';
     case'quiet':return e.type==='quiet';
-    case'problems':return e.type==='incident';
+    case'problems':return e.type==='incident'||e.type==='slip';
     case'panel':return e.type==='system';
   }return true;
 }

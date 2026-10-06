@@ -159,3 +159,27 @@ func TestPreviewKeepsTheConversationInOrder(t *testing.T) {
 		t.Fatal("empty conversation should be refused")
 	}
 }
+
+func TestFeedFlagsFirstContactAndSlips(t *testing.T) {
+	e, _, _ := setup(t, say("done, reminder set"), say("i set it"))
+	e.Handle(context.Background(), msg("1", "remind me to stretch"))
+	var first, slip bool
+	for _, ev := range e.Ev.Since(0) {
+		if ev.Type == "heard" && ev.First {
+			first = true
+		}
+		if ev.Type == "slip" && ev.Reason == "unmet_promise" {
+			slip = true
+		}
+	}
+	if !first || !slip {
+		t.Fatalf("first=%v slip=%v %+v", first, slip, e.Ev.Since(0))
+	}
+	e.Handle(context.Background(), msg("2", "thanks"))
+	evs := e.Ev.Since(0)
+	for _, ev := range evs[len(evs)-3:] {
+		if ev.Type == "heard" && ev.First {
+			t.Fatalf("second message from the same person is not a first contact: %+v", ev)
+		}
+	}
+}
