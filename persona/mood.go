@@ -15,12 +15,17 @@ type Mood struct {
 	Energy  float64 // 0 asleep .. 1 wired
 	Reason  string
 	last    time.Time
+	// flustered is a quick, sharp reaction to being praised to her face. It fades
+	// in minutes, not hours, unlike the slow axes above.
+	flustered   float64
+	flusteredAt time.Time
 }
 
 func NewMood() *Mood { return &Mood{Energy: 0.5, last: time.Now()} }
 
 var (
 	posWords    = []string{"lol", "lmao", "xd", "haha", "jaja", "nice", "thanks", "thank you", "gracias", "love", "peak", "cooked"}
+	praiseWords = []string{"cute", "adorable", "love you", "best bot", "you're the best", "so pretty", "proud of you", "marry me", "my favorite", "my favourite"}
 	negWords    = []string{"annoying", "broken", "hate this", "fuck this", "pissed", "awful", "terrible", "odio"}
 	sleepyWords = []string{"tired", "sleepy", "good night", "gn", "bored", "sueño"}
 )
@@ -71,6 +76,10 @@ func (m *Mood) Observe(author, text string, direct bool) {
 	if len(text) > 500 {
 		m.Energy += 0.015
 	}
+	if direct && has(praiseWords) {
+		m.flustered, m.flusteredAt = 1, now
+		m.Reason = author + " said something nice to her face"
+	}
 	if direct {
 		m.Valence += 0.02
 		m.Energy += 0.02
@@ -78,15 +87,23 @@ func (m *Mood) Observe(author, text string, direct bool) {
 	}
 	m.Valence = clamp(m.Valence, -1, 1)
 	m.Energy = clamp(m.Energy, 0.05, 1)
-	if math.Abs(m.Valence) < 0.05 && m.Energy < 0.6 {
+	if math.Abs(m.Valence) < 0.05 && m.Energy < 0.6 && m.flusteredNow() <= 0.25 {
 		m.Reason = ""
 	}
+}
+
+// flusteredNow is the praise reaction, decayed to the present moment.
+func (m *Mood) flusteredNow() float64 {
+	if m.flustered <= 0 {
+		return 0
+	}
+	return m.flustered * math.Pow(0.6, time.Since(m.flusteredAt).Minutes())
 }
 
 // MoodState is the mood as data: one dominant name from a closed set plus how
 // strongly it holds, for things that react to her mood (the avatar, the panel).
 type MoodState struct {
-	Name      string  `json:"name"`      // neutral | amused | irritated | sleepy | wired
+	Name      string  `json:"name"`      // neutral | amused | smug | irritated | sleepy | wired | flustered
 	Intensity float64 `json:"intensity"` // 0..1, 0 for neutral
 	Valence   float64 `json:"valence"`
 	Energy    float64 `json:"energy"`
@@ -103,7 +120,12 @@ func (m *Mood) Snapshot() MoodState {
 			st.Name, st.Intensity = name, in
 		}
 	}
-	try("amused", m.Valence > 0.25, score(m.Valence-0.25, 0.75))
+	// flustered goes first so it keeps a tie: a sharp reaction beats a slow mood
+	if f := m.flusteredNow(); f > 0.25 {
+		try("flustered", true, clamp(0.3+f*0.7, 0.3, 1))
+	}
+	try("amused", m.Valence > 0.25 && m.Valence <= 0.6, score(m.Valence-0.25, 0.35))
+	try("smug", m.Valence > 0.6, score(m.Valence-0.6, 0.4))
 	try("irritated", m.Valence < -0.25, score(-m.Valence-0.25, 0.75))
 	try("wired", m.Energy > 0.75, score(m.Energy-0.75, 0.25))
 	try("sleepy", m.Energy < 0.3, score(0.3-m.Energy, 0.25))
@@ -115,7 +137,12 @@ func (m *Mood) Describe() string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var parts []string
+	if m.flusteredNow() > 0.25 {
+		parts = append(parts, "flustered")
+	}
 	switch {
+	case m.Valence > 0.6:
+		parts = append(parts, "smug")
 	case m.Valence > 0.25:
 		parts = append(parts, "warm and amused")
 	case m.Valence < -0.25:

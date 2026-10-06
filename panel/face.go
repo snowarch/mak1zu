@@ -47,11 +47,10 @@ func Face(m persona.MoodState, paused, down bool, last *events.Event, now time.T
 		return "sleepy"
 	}
 	switch m.Name {
-	case "amused":
-		if m.Intensity > 0.6 {
-			return "smug"
-		}
-		return "amused"
+	case "flustered":
+		return "embarrassed"
+	case "amused", "smug":
+		return m.Name
 	case "irritated":
 		if m.Intensity > 0.6 {
 			return "irritated"

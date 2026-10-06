@@ -259,8 +259,9 @@ func TestFaceFollowsMoodThenMoments(t *testing.T) {
 		want   string
 	}{
 		{"baseline", mood("neutral", 0), false, nil, "neutral"},
-		{"mild amusement", mood("amused", 0.4), false, nil, "amused"},
-		{"strong amusement is smug", mood("amused", 0.9), false, nil, "smug"},
+		{"amusement", mood("amused", 0.4), false, nil, "amused"},
+		{"smug", mood("smug", 0.9), false, nil, "smug"},
+		{"flustered shows as embarrassed", mood("flustered", 0.8), false, nil, "embarrassed"},
 		{"mild irritation is deadpan", mood("irritated", 0.4), false, nil, "deadpan"},
 		{"strong irritation", mood("irritated", 0.9), false, nil, "irritated"},
 		{"sleepy", mood("sleepy", 0.5), false, nil, "sleepy"},
@@ -289,7 +290,7 @@ func TestFaceOnlyReturnsContractNames(t *testing.T) {
 		ok[n] = true
 	}
 	now := time.Now()
-	for _, n := range []string{"neutral", "amused", "irritated", "sleepy", "wired", "bogus"} {
+	for _, n := range []string{"neutral", "amused", "smug", "flustered", "irritated", "sleepy", "wired", "bogus"} {
 		for _, in := range []float64{0, 0.5, 1} {
 			for _, p := range []bool{false, true} {
 				if f := Face(persona.MoodState{Name: n, Intensity: in}, p, p, nil, now); !ok[f] {

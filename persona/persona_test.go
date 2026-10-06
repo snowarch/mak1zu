@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseFrontMatter(t *testing.T) {
@@ -73,7 +74,7 @@ func TestMoodSnapshotUsesClosedNamesAndGrows(t *testing.T) {
 	}
 	m.Valence = 0.3
 	low := m.Snapshot()
-	m.Valence = 1
+	m.Valence = 0.55
 	high := m.Snapshot()
 	if low.Name != "amused" || high.Name != "amused" || !(high.Intensity > low.Intensity) || high.Intensity > 1 {
 		t.Fatalf("%+v %+v", low, high)
@@ -85,5 +86,27 @@ func TestMoodSnapshotUsesClosedNamesAndGrows(t *testing.T) {
 	m.Valence, m.Energy = 0, 0.9
 	if s := m.Snapshot(); s.Name != "wired" {
 		t.Fatalf("%+v", s)
+	}
+}
+
+func TestSmugAtHighValenceAndFlusteredFromPraise(t *testing.T) {
+	m := NewMood()
+	m.Valence = 0.9
+	if s := m.Snapshot(); s.Name != "smug" || s.Intensity <= 0.3 {
+		t.Fatalf("%+v", s)
+	}
+	m = NewMood()
+	m.Observe("Dana", "you're the best bot, honestly", false) // not to her face: no reaction
+	if s := m.Snapshot(); s.Name == "flustered" {
+		t.Fatalf("praise in passing should not fluster her: %+v", s)
+	}
+	m.Observe("Dana", "you're so cute", true)
+	s := m.Snapshot()
+	if s.Name != "flustered" || !strings.Contains(m.Describe(), "flustered") || m.Reason == "" {
+		t.Fatalf("%+v %q", s, m.Describe())
+	}
+	m.flusteredAt = time.Now().Add(-30 * time.Minute) // it fades fast
+	if s := m.Snapshot(); s.Name == "flustered" {
+		t.Fatalf("still flustered after half an hour: %+v", s)
 	}
 }
