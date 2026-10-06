@@ -19,7 +19,9 @@ import (
 	"time"
 
 	"github.com/snowarch/mak1zu/config"
+	"github.com/snowarch/mak1zu/engine"
 	"github.com/snowarch/mak1zu/home"
+	"github.com/snowarch/mak1zu/internal/events"
 	"github.com/snowarch/mak1zu/internal/telemetry"
 	"github.com/snowarch/mak1zu/memory"
 	"github.com/snowarch/mak1zu/persona"
@@ -37,6 +39,13 @@ type Server struct {
 	Tel    *telemetry.Log
 	Router *provider.Router
 	Tools  func() []string
+	Ev     *events.Hub
+	// Mood describes her current mood; Preview answers a test chat message with
+	// the live persona. Both are optional seams wired by main.
+	Mood    func() string
+	Preview func(ctx context.Context, speaker string, convo []engine.PreviewTurn) (engine.PreviewResult, error)
+	Version string
+	Started time.Time
 	// Test seam: build a client for the provider test button.
 	NewClient func(name string, p config.Provider) provider.Client
 }
@@ -52,6 +61,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/persona", s.putPersona)
 	mux.HandleFunc("POST /api/persona/activate", s.activate)
 	mux.HandleFunc("GET /api/telemetry", s.telemetry)
+	mux.HandleFunc("GET /api/schema", s.schema)
+	mux.HandleFunc("GET /api/presets", s.presets)
+	mux.HandleFunc("POST /api/provider/add", s.addProvider)
+	mux.HandleFunc("GET /api/events", s.eventsStream)
+	mux.HandleFunc("GET /api/events/recent", s.eventsRecent)
+	mux.HandleFunc("POST /api/preview", s.preview)
 	mux.HandleFunc("GET /api/home/list", s.homeList)
 	mux.HandleFunc("GET /api/home/file", s.homeGet)
 	mux.HandleFunc("PUT /api/home/file", s.homePut)
@@ -134,7 +149,18 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	for n, p := range cfg.LLM.Providers {
 		hasKey[n] = p.Key() != ""
 	}
+	mood := ""
+	if s.Mood != nil {
+		mood = s.Mood()
+	}
+	up := int64(0)
+	if !s.Started.IsZero() {
+		up = int64(time.Since(s.Started).Seconds())
+	}
 	writeJSON(w, 200, map[string]any{
+		"paused": cfg.Behavior.Paused, "mood": mood, "uptime_s": up, "version": s.Version,
+		"invite_url": InviteURL(cfg.Discord.BotToken()),
+		"checklist":  Checklist(cfg), "activity": s.recentActivity(),
 		"config": cfg.Redacted(), "personas": s.Lib().List(), "active": cfg.Persona.Active,
 		"cooldowns": cool, "memory": stats, "has_key": hasKey, "tools": tools,
 		"discord_token_set": cfg.Discord.BotToken() != "",
@@ -165,6 +191,9 @@ func (s *Server) patch(w http.ResponseWriter, r *http.Request) {
 		fail(w, 422, err)
 		return
 	}
+	for p, v := range body.Edits {
+		s.note(describeEdit(p, v))
+	}
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
 
@@ -185,16 +214,12 @@ func (s *Server) testProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 	defer cancel()
-	start := time.Now()
-	resp, err := cl.Complete(ctx, provider.Request{
-		System: "Reply with exactly: pong", MaxTokens: 20,
-		Messages: []provider.Message{{Role: provider.User, Content: "ping"}},
-	})
-	out := map[string]any{"latency_ms": time.Since(start).Milliseconds()}
-	if err != nil {
-		out["ok"], out["kind"], out["error"] = false, provider.KindOf(err).String(), err.Error()
+	d := provider.ProbeClient(ctx, cl, p)
+	out := map[string]any{"ok": d.OK, "latency_ms": d.Latency.Milliseconds()}
+	if d.OK {
+		out["reply"] = d.Reply
 	} else {
-		out["ok"], out["reply"] = true, resp.Text
+		out["kind"], out["error"], out["fix"], out["models"] = d.Kind, d.Problem, d.Fix, d.Models
 	}
 	writeJSON(w, 200, out)
 }

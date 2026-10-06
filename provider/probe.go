@@ -17,6 +17,7 @@ import (
 // it: Problem says what is wrong, Fix says what to do about it.
 type Diagnosis struct {
 	OK      bool
+	Kind    string // error class, "" when OK
 	Latency time.Duration
 	Reply   string
 	Problem string
@@ -27,6 +28,12 @@ type Diagnosis struct {
 // Probe makes one tiny real request and explains the failure in plain words.
 // It never returns or logs the key.
 func Probe(ctx context.Context, name string, c config.Provider) Diagnosis {
+	return ProbeClient(ctx, NewHTTP(name, c), c)
+}
+
+// ProbeClient is Probe with the client supplied, so callers (and tests) can
+// substitute the transport. Model suggestions only work with the real client.
+func ProbeClient(ctx context.Context, cl Client, c config.Provider) Diagnosis {
 	if c.APIKeyEnv != "" && c.Key() == "" && c.APIKey == "" {
 		return Diagnosis{Problem: "no key: the environment variable " + c.APIKeyEnv + " is empty",
 			Fix: "put " + c.APIKeyEnv + "=your-key in .makizu/.env (or export it) and start her again"}
@@ -34,16 +41,18 @@ func Probe(ctx context.Context, name string, c config.Provider) Diagnosis {
 	if c.BaseURL == "" || c.Model == "" {
 		return Diagnosis{Problem: "base_url or model is empty", Fix: "pick a preset in the panel or fill both in config.json"}
 	}
-	h := NewHTTP(name, c)
 	// reasoning models burn tokens thinking before the first visible word, so a
 	// stingy budget would report a working setup as broken
-	r, err := h.Complete(ctx, Request{System: "Answer with the single word: ok", MaxTokens: 400, Messages: []Message{{Role: User, Content: "ping"}}})
+	r, err := cl.Complete(ctx, Request{System: "Answer with the single word: ok", MaxTokens: 400, Messages: []Message{{Role: User, Content: "ping"}}})
 	if err == nil {
 		return Diagnosis{OK: true, Latency: r.Latency, Reply: strings.TrimSpace(r.Text)}
 	}
 	d := explain(err, c)
-	if pe, ok := err.(*Error); ok && (pe.Kind == KindBadRequest) && pe.Status != 0 {
-		d.Models = suggestModels(ctx, h, c.Model)
+	d.Kind = KindOf(err).String()
+	if h, isHTTP := cl.(*HTTP); isHTTP {
+		if pe, ok := err.(*Error); ok && pe.Kind == KindBadRequest && pe.Status != 0 {
+			d.Models = suggestModels(ctx, h, c.Model)
+		}
 	}
 	return d
 }

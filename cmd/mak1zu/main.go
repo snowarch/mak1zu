@@ -303,8 +303,8 @@ func cmdRun(st *config.Store) error {
 
 	if cfg.WebUI.Enabled {
 		ps := &panel.Server{Cfg: st, Lib: func() persona.Library { return persona.Library{Dir: st.Abs(st.Get().Persona.Dir)} },
-			Home: e.Home,
-			Mem:  mem, Tel: e.Tel, Router: router, Tools: func() []string {
+			Home: e.Home, Ev: e.Ev, Mood: e.Mood, Preview: e.Preview, Version: version, Started: time.Now(),
+			Mem: mem, Tel: e.Tel, Router: router, Tools: func() []string {
 				var n []string
 				for _, s := range e.Tools.Specs(true) {
 					n = append(n, s.Name)

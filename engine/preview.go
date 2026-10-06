@@ -90,3 +90,6 @@ func (e *Engine) Preview(ctx context.Context, speaker string, convo []PreviewTur
 		LatencyMs: time.Since(start).Milliseconds(), Words: len(strings.Fields(out)), Robotic: guard.RoboticHits(out),
 	}, nil
 }
+
+// Mood describes her current mood in a few words ("" when baseline).
+func (e *Engine) Mood() string { return e.mood.Describe() }
