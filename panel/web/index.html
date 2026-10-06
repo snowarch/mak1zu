@@ -3,247 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mak1zu panel</title>
+<title>Mak1zu</title>
 <link rel="icon" href="favicon.png">
-<style>
-:root{--sumi:#121114;--washi:#F3F0EA;--shu:#E4412B;
- --bg:var(--washi);--fg:var(--sumi);--mut:#6b665f;--card:#fbf9f5;--line:#d9d4ca;--dot:rgba(18,17,20,.07);--ok:#2e7d4f;}
-@media (prefers-color-scheme:dark){:root{--bg:var(--sumi);--fg:var(--washi);--mut:#9a948a;--card:#1a181d;--line:#2c2a30;--dot:rgba(243,240,234,.06);--ok:#6fcf97;}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 ui-sans-serif,system-ui,"Segoe UI",sans-serif;
- background-image:radial-gradient(var(--dot) 1.2px,transparent 1.4px);background-size:9px 9px}
-header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--bg);position:sticky;top:0;z-index:5}
-header img{width:34px;height:34px;border-radius:50%}
-header h1{font-size:17px;margin:0;letter-spacing:.02em}header h1 b{color:var(--shu)}
-header .sp{flex:1}
-#bar{display:none;gap:10px;align-items:center}#bar.on{display:flex}
-button,select,input,textarea{font:inherit;color:inherit}
-button{border:1px solid var(--line);background:var(--card);padding:6px 12px;border-radius:6px;cursor:pointer}
-button:hover{border-color:var(--shu)}
-button.pri{background:var(--shu);border-color:var(--shu);color:#fff}
-button.danger:hover{background:var(--shu);color:#fff}
-nav{display:flex;gap:2px;padding:0 14px;border-bottom:1px solid var(--line);overflow-x:auto;background:var(--bg)}
-nav button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:10px 14px}
-nav button.on{border-bottom-color:var(--shu);font-weight:600}
-main{max-width:920px;margin:0 auto;padding:20px 16px 80px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0 0 14px}
-.card h3{margin:0 0 8px;font-size:15px}.card h3 small{color:var(--mut);font-weight:400;margin-left:8px}
-.row{display:grid;grid-template-columns:minmax(150px,230px) 1fr;gap:6px 14px;align-items:center;padding:5px 0}
-@media(max-width:600px){.row{grid-template-columns:1fr}}
-.row label{color:var(--mut);font-size:13px}
-input[type=checkbox]{width:18px;height:18px;accent-color:var(--shu);justify-self:start}
-input[type=text],input[type=number],input[type=password],select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
-input:focus,textarea:focus,select:focus{outline:2px solid var(--shu);outline-offset:0}
-textarea{min-height:90px;resize:vertical;font-family:ui-monospace,monospace;font-size:13px}
-textarea.big{min-height:420px}
-.changed{border-color:var(--shu)!important}
-.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;border:1px solid var(--line);color:var(--mut)}
-.pill.ok{color:var(--ok);border-color:var(--ok)}.pill.bad{color:var(--shu);border-color:var(--shu)}
-.kv{display:flex;gap:18px;flex-wrap:wrap}.kv div{min-width:110px}.kv b{display:block;font-size:22px}
-table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left}
-.hint{color:var(--mut);font-size:13px;margin:4px 0 10px}
-#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--sumi);color:var(--washi);padding:9px 16px;border-radius:8px;display:none;z-index:9;max-width:90vw}
-#toast.err{background:var(--shu)}
-.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
-</style>
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
-<header>
-  <img src="logo.svg" alt="">
-  <h1>Mak<b>1</b>zu <span class="pill" id="who"></span></h1>
-  <span class="sp"></span>
-  <div id="bar"><span id="n"></span><button id="discard">Discard</button><button class="pri" id="save">Apply</button></div>
-</header>
-<nav id="tabs"></nav>
-<main id="main"></main>
-<div id="toast"></div>
-<script>
-"use strict";
-const $=(s,r=document)=>r.querySelector(s);
-const h=(t,a={},...c)=>{const e=document.createElement(t);for(const[k,v]of Object.entries(a)){if(k==='class')e.className=v;else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(v!==false&&v!=null)e.setAttribute(k,v===true?'':v)}for(const x of c.flat())e.append(x?.nodeType?x:document.createTextNode(x??''));return e};
-let S=null,dirty={},tab=(location.hash||'').slice(1)||localStorage.getItem('tab')||'status';
-const TABS=[['status','Status'],['persona','Persona'],['directives','Rules & skills'],['models','Models'],['behavior','Behavior'],['discord','Discord'],['tools','Tools'],['memory','Memory & log']];
-
-function toast(m,err){const t=$('#toast');t.textContent=m;t.className=err?'err':'';t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',err?6000:2200)}
-async function api(m,p,b){
-  const o={method:m,headers:{'X-Mak1zu':'1'}};
-  const tok=sessionStorage.getItem('tok');if(tok)o.headers.Authorization='Bearer '+tok;
-  if(b!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(b)}
-  const r=await fetch(p,o);
-  if(r.status===401){const t=prompt('Panel token');if(t){sessionStorage.setItem('tok',t);return api(m,p,b)}}
-  const j=await r.json().catch(()=>({}));
-  if(!r.ok)throw new Error(j.error||r.statusText);return j;
-}
-const get=(o,p)=>p.split('.').reduce((a,k)=>a?.[k],o);
-const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-function mark(){const n=Object.keys(dirty).length;$('#bar').classList.toggle('on',n>0);$('#n').textContent=n+' unsaved change'+(n>1?'s':'')}
-function setEdit(path,val,el){
-  if(same(val,get(S.config,path)))delete dirty[path];else dirty[path]=val;
-  el?.classList.toggle('changed',path in dirty);mark();
-}
-const humanize=k=>k.replace(/_/g,' ');
-
-// Generic field bound to a config path. Discord IDs are strings: never parse arrays of them as numbers.
-function field(path,label,opts={}){
-  const cur=get(S.config,path);const row=h('div',{class:'row'},h('label',{},label||humanize(path.split('.').pop())));
-  let el;
-  if(opts.secret){
-    el=h('input',{type:'password',placeholder:opts.isSet?'••• set — type to replace':'not set',autocomplete:'off',
-      oninput:e=>{if(e.target.value)dirty[path]=e.target.value;else delete dirty[path];e.target.classList.toggle('changed',path in dirty);mark()}});
-  }else if(opts.options){
-    el=h('select',{onchange:e=>setEdit(path,e.target.value,e.target)},opts.options.map(o=>h('option',{value:o,selected:o===cur},o||'(default)')));
-  }else if(typeof cur==='boolean'||opts.bool){
-    el=h('input',{type:'checkbox',checked:!!cur,onchange:e=>setEdit(path,e.target.checked,e.target)});
-  }else if(Array.isArray(cur)||opts.list){
-    el=h('textarea',{rows:Math.max(2,Math.min(6,(cur||[]).length+1)),style:'min-height:0',placeholder:'one per line',oninput:e=>setEdit(path,e.target.value.split('\n').map(s=>s.trim()).filter(Boolean),e.target)},(cur||[]).join('\n'));
-  }else if(typeof cur==='number'||opts.num){
-    el=h('input',{type:'number',step:'any',value:cur??'',oninput:e=>{const v=e.target.value===''?0:Number(e.target.value);setEdit(path,v,e.target)}});
-  }else{
-    el=h('input',{type:'text',value:cur??'',oninput:e=>setEdit(path,e.target.value,e.target)});
-  }
-  row.append(el);if(opts.hint)row.append(h('span'),h('span',{class:'hint'},opts.hint));return row;
-}
-function tree(prefix,obj,skip=[]){
-  const out=[];
-  for(const[k,v]of Object.entries(obj||{})){
-    if(skip.includes(k))continue;
-    const p=prefix+'.'+k;
-    if(v&&typeof v==='object'&&!Array.isArray(v))out.push(h('div',{class:'card'},h('h3',{},humanize(k)),tree(p,v)));
-    else out.push(field(p));
-  }
-  return out;
-}
-
-const PRESETS={
- 'OpenAI':{base_url:'https://api.openai.com/v1',model:'gpt-4.1-mini',api_key_env:'OPENAI_API_KEY'},
- 'OpenRouter':{base_url:'https://openrouter.ai/api/v1',model:'',api_key_env:'OPENROUTER_API_KEY'},
- 'Ollama (local)':{base_url:'http://127.0.0.1:11434/v1',model:'llama3.1',api_key_env:''},
- 'llama.cpp / vLLM (local)':{base_url:'http://127.0.0.1:8080/v1',model:'local',api_key_env:''},
- 'Groq':{base_url:'https://api.groq.com/openai/v1',model:'',api_key_env:'GROQ_API_KEY'},
- 'Anthropic-compatible gateway':{base_url:'',model:'',api_key_env:''}};
-
-const views={
- status(){
-  const c=S.config,m=S.memory||{};
-  return [h('div',{class:'card'},h('h3',{},'Now'),h('div',{class:'kv'},
-    h('div',{},h('small',{},'persona'),h('b',{},S.active)),
-    h('div',{},h('small',{},'memories'),h('b',{},m.memories??0)),
-    h('div',{},h('small',{},'people'),h('b',{},m.people??0)),
-    h('div',{},h('small',{},'turns logged'),h('b',{},m.turns??0)))),
-   h('div',{class:'card'},h('h3',{},'Providers'),
-    Object.keys(c.llm.providers).map(n=>h('div',{class:'row'},h('label',{},n),h('div',{},
-      h('span',{class:'pill '+(S.has_key[n]||!c.llm.providers[n].api_key_env?'ok':'bad')},S.has_key[n]?'key set':(c.llm.providers[n].api_key_env?'no key':'no key needed')),' ',
-      c.llm.providers[n].enabled?'':h('span',{class:'pill'},'disabled'),' ',
-      S.cooldowns[n]?h('span',{class:'pill bad'},'cooling '+Math.ceil(S.cooldowns[n])+'s'):'',' ',c.llm.providers[n].model)))),
-   h('div',{class:'card'},h('h3',{},'Discord'),h('div',{class:'row'},h('label',{},'token'),h('span',{class:'pill '+(S.discord_token_set?'ok':'bad')},S.discord_token_set?'set':'missing (set the env var)')),
-    ),
-   h('div',{class:'card'},h('h3',{},'Tools'),h('div',{},(S.tools||[]).join(', ')||'—'))];
- },
- persona(){
-  const sel=h('select',{onchange:e=>loadPersona(e.target.value)},S.personas.map(p=>h('option',{value:p,selected:p===S.active},p+(p===S.active?' (active)':''))));
-  const ta=h('textarea',{class:'big',id:'ptext',spellcheck:'false'});
-  const nid=h('input',{type:'text',placeholder:'new persona id (a-z, 0-9, -)',style:'max-width:240px'});
-  async function loadPersona(id){const r=await api('GET','/api/persona?id='+encodeURIComponent(id));ta.value=r.text;ta.dataset.id=id}
-  setTimeout(()=>loadPersona(S.active),0);
-  return [h('div',{class:'card'},h('h3',{},'Character file',h('small',{},'Markdown. Front matter + who she is. The shared human-writing substrate is added automatically unless substrate: false.')),
-    h('div',{class:'actions'},sel,
-      h('button',{onclick:async()=>{try{await api('PUT','/api/persona',{id:ta.dataset.id,text:ta.value});toast('Saved '+ta.dataset.id)}catch(e){toast(e.message,1)}}},'Save file'),
-      h('button',{class:'pri',onclick:async()=>{try{await api('PUT','/api/persona',{id:ta.dataset.id,text:ta.value});await api('POST','/api/persona/activate',{id:ta.dataset.id});toast('Active: '+ta.dataset.id);await refresh()}catch(e){toast(e.message,1)}}},'Save & activate')),
-    h('div',{style:'margin-top:10px'},ta),
-    h('div',{class:'actions'},nid,h('button',{onclick:async()=>{const id=nid.value.trim();if(!/^[a-z0-9][a-z0-9-]*$/.test(id))return toast('bad id',1);
-      try{await api('PUT','/api/persona',{id,text:'---\nname: '+id+'\n---\n\n# Who you are\n\nDescribe your character here: identity, temperament, tastes, how they treat people.\n'});await refresh();toast('Created '+id)}catch(e){toast(e.message,1)}}},'Create')))];
- },
- models(){
-  const c=S.config,out=[];
-  out.push(h('div',{class:'card'},h('h3',{},'Routing',h('small',{},'ordered fallbacks, first healthy wins')),
-    field('llm.routing.text','text'),field('llm.routing.vision','vision (images)'),field('llm.temperature','temperature')));
-  for(const n of Object.keys(c.llm.providers)){
-    const p='llm.providers.'+n,res=h('span',{class:'hint'});
-    out.push(h('div',{class:'card'},h('h3',{},n,h('small',{},c.llm.providers[n].model)),
-      field(p+'.enabled','enabled'),field(p+'.base_url','base URL'),field(p+'.model','model'),
-      field(p+'.protocol','protocol',{options:['chat','responses'],hint:'responses = models that reject /chat/completions'}),
-      field(p+'.api_key_env','API key env var',{hint:'preferred: keep the key in your environment'}),
-      field(p+'.api_key','API key (write-only)',{secret:true,isSet:S.has_key[n]&&!c.llm.providers[n].api_key_env}),
-      field(p+'.reasoning_effort','reasoning effort',{options:['','minimal','low','medium','high']}),
-      field(p+'.reasoning_headroom','reasoning headroom',{num:true,hint:'extra tokens for thinking models, or the visible reply comes back empty'}),
-      field(p+'.timeout_seconds','timeout (s)',{num:true}),field(p+'.failure_cooldown_seconds','cooldown after failure (s)',{num:true}),field(p+'.vision','supports images',{bool:true}),
-      h('div',{class:'actions'},
-        h('button',{onclick:async()=>{if(Object.keys(dirty).length)return toast('Apply your changes first so the test uses them',1);res.textContent='calling…';
-          try{const r=await api('POST','/api/provider/test',{name:n});res.textContent=r.ok?`✓ "${r.reply}" in ${r.latency_ms} ms`:`✗ ${r.kind}: ${r.error}`}catch(e){res.textContent='✗ '+e.message}}},'Test (real call)'),
-        h('button',{class:'danger',onclick:async()=>{if(!confirm('Delete provider '+n+'?'))return;try{await api('POST','/api/config/patch',{edits:{[p]:null}});await refresh()}catch(e){toast(e.message,1)}}},'Delete'),res)));
-  }
-  const ps=h('select',{},Object.keys(PRESETS).map(k=>h('option',{},k))),nm=h('input',{type:'text',placeholder:'name (e.g. local)',style:'max-width:200px'});
-  out.push(h('div',{class:'card'},h('h3',{},'Add provider'),h('div',{class:'actions'},ps,nm,h('button',{onclick:async()=>{
-    const id=nm.value.trim();if(!/^[a-z0-9_-]+$/i.test(id))return toast('bad name',1);const pr=PRESETS[ps.value];
-    try{await api('POST','/api/config/patch',{edits:{['llm.providers.'+id]:{enabled:true,protocol:'chat',timeout_seconds:60,failure_cooldown_seconds:30,vision:false,...pr}}});await refresh()}catch(e){toast(e.message,1)}}},'Add'))));
-  return out;
- },
- behavior(){return [h('p',{class:'hint'},'Every value applies live. Probabilities are 0–1.'),...tree('behavior',S.config.behavior)]},
- discord(){
-  const d='discord';
-  return [h('div',{class:'card'},h('h3',{},'Identity'),field(d+'.owner_id','owner ID',{hint:'Discord IDs are text. Only the owner can DM her; empty = anyone.'}),
-     field(d+'.token_env','bot token env var'),field(d+'.enabled','enabled',{bool:true}),
-     h('div',{class:'row'},h('label',{},'token'),h('span',{class:'pill '+(S.discord_token_set?'ok':'bad')},S.discord_token_set?'set':'missing'))),
-   h('div',{class:'card'},h('h3',{},'Channels',h('small',{},'IDs, one per line')),
-     field(d+'.home_channels','home (she talks freely)'),field(d+'.allowed_channels','allowed (empty = all)'),
-     field(d+'.mention_only_channels','mention-only',{hint:'a real @mention wakes her; her name, replies and chatter never do'}),
-     field(d+'.peer_bots','peer bots (banter allowed in home)')),
-   h('div',{class:'card'},h('h3',{},'Limits'),
-     field(d+'.only_guilds','only these servers',{hint:'server IDs; empty = every server she is in. DMs follow owner ID.'}),
-     field(d+'.human_webhooks','webhooks that are people',{hint:'webhook IDs of chat bridges; any other webhook counts as a bot'}),
-     field(d+'.register_commands','publish slash commands',{bool:true,hint:'turn off if another program shares this bot application'}))];
- },
- directives(){
-  const KINDS={rules:['Rules','file name like 10-tone (a-z 0-9 _ -)','Always in her prompt, sorted by name.'],skills:['Skills','skill name like anime-recs','Know-how she reads on demand. Put description: in the front matter.'],servers:['Servers','server ID (numbers)','Applies only in that server.'],channels:['Channels','channel ID (numbers)','Applies only in that channel.']};
-  let kind=sessionStorage.getItem('dk')||'rules';
-  const box=h('div');
-  async function draw(){
-    const ks=h('select',{onchange:e=>{kind=e.target.value;sessionStorage.setItem('dk',kind);draw()}},Object.entries(KINDS).map(([k,v])=>h('option',{value:k,selected:k===kind},v[0])));
-    const l=await api('GET','/api/home/list?kind='+kind);
-    const ta=h('textarea',{class:'big',spellcheck:'false',placeholder:'Pick a file or create a new one'}),cur=h('input',{type:'text',placeholder:KINDS[kind][1]});
-    async function open(n){const r=await api('GET','/api/home/file?kind='+kind+'&name='+encodeURIComponent(n));cur.value=n;ta.value=r.text}
-    box.replaceChildren(h('div',{class:'card'},h('h3',{},'Her directives',h('small',{},KINDS[kind][2])),
-      h('div',{class:'actions'},ks,...l.names.map(n=>h('button',{onclick:()=>open(n)},n))),
-      h('div',{style:'margin-top:10px'},cur),h('div',{style:'margin-top:8px'},ta),
-      h('div',{class:'actions'},
-        h('button',{class:'pri',onclick:async()=>{try{await api('PUT','/api/home/file',{kind,name:cur.value.trim(),text:ta.value});toast('Saved, applies on her next message');draw()}catch(e){toast(e.message,1)}}},'Save'),
-        h('button',{class:'danger',onclick:async()=>{if(!cur.value||!confirm('Delete '+cur.value+'?'))return;try{await api('DELETE','/api/home/file?kind='+kind+'&name='+encodeURIComponent(cur.value.trim()));toast('Deleted');draw()}catch(e){toast(e.message,1)}}},'Delete'))));
-  }
-  draw();return [box];
- },
- tools(){
-  const mcp=S.config.tools.mcp_servers||{};
-  return [h('div',{class:'card'},h('h3',{},'Switch tools off',h('small',{},'names, one per line; applies live')),
-     field('tools.disabled','disabled tools',{list:true}),
-     h('div',{class:'row'},h('label',{},'available'),h('span',{},(S.tools||[]).join(', ')||'—'))),
-   h('div',{class:'card'},h('h3',{},'MCP servers',h('small',{},'only allowlisted tools are exposed; the child never gets her API keys; restart to (re)connect')),
-     Object.keys(mcp).length?Object.keys(mcp).map(n=>h('div',{class:'card'},h('h3',{},n),
-       field('tools.mcp_servers.'+n+'.enabled','enabled'),field('tools.mcp_servers.'+n+'.command','command'),
-       field('tools.mcp_servers.'+n+'.args','arguments',{list:true}),field('tools.mcp_servers.'+n+'.allow','allowed tools',{list:true}),
-       field('tools.mcp_servers.'+n+'.heavy','heavy (research budget)',{bool:true}),
-       h('div',{class:'actions'},h('button',{class:'danger',onclick:async()=>{if(!confirm('Remove '+n+'?'))return;try{await api('POST','/api/config/patch',{edits:{['tools.mcp_servers.'+n]:null}});await refresh()}catch(e){toast(e.message,1)}}},'Remove')))):h('p',{class:'hint'},'None configured.'),
-     (()=>{const nm=h('input',{type:'text',placeholder:'name',style:'max-width:160px'}),cm=h('input',{type:'text',placeholder:'command (e.g. uvx)',style:'max-width:200px'});
-       return h('div',{class:'actions'},nm,cm,h('button',{onclick:async()=>{if(!/^[a-z0-9_-]+$/i.test(nm.value)||!cm.value)return toast('name and command required',1);
-         try{await api('POST','/api/config/patch',{edits:{['tools.mcp_servers.'+nm.value]:{enabled:true,command:cm.value,args:[],allow:[],heavy:false}}});await refresh()}catch(e){toast(e.message,1)}}},'Add server'))})())];
- },
- async memory(){
-  const m=S.memory||{},t=(await api('GET','/api/telemetry'))||[];
-  return [h('div',{class:'card'},h('h3',{},'Memory'),h('div',{class:'kv'},Object.entries(m).map(([k,v])=>h('div',{},h('small',{},k),h('b',{},v))))),
-   ...tree('memory',S.config.memory),
-   h('div',{class:'card'},h('h3',{},'Recent turns & incidents'),
-    h('table',{},h('tr',{},['time','kind','provider','latency','words','tools','cause'].map(x=>h('th',{},x))),
-     t.slice().reverse().map(r=>h('tr',{},h('td',{},new Date(r.ts).toLocaleTimeString()),h('td',{},r.kind),h('td',{},r.provider||''),h('td',{},r.latency_s?r.latency_s.toFixed(1)+'s':''),h('td',{},r.words||''),h('td',{},(r.tools||[]).join(',')),h('td',{},r.cause||'')))))];
- }};
-
-async function render(){
-  const nav=$('#tabs');nav.replaceChildren(...TABS.map(([k,l])=>h('button',{class:k===tab?'on':'',onclick:()=>{tab=k;localStorage.setItem('tab',k);render()}},l)));
-  $('#who').textContent=S.active;
-  const m=$('#main');m.replaceChildren(...[].concat(await views[tab]()));
-}
-async function refresh(){S=await api('GET','/api/state');dirty={};mark();await render()}
-$('#discard').onclick=()=>{dirty={};mark();render()};
-$('#save').onclick=async()=>{try{await api('POST','/api/config/patch',{edits:dirty});toast('Applied live');await refresh()}catch(e){toast(e.message,1)}};
-refresh().catch(e=>toast(e.message,1));
-</script>
+<div class="shell">
+  <aside class="rail">
+    <div class="brand"><img src="logo.svg" alt=""><div><b>Mak<i>1</i>zu</b><small id="ver"></small></div></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="sp"></div>
+    <div class="foot" id="foot"></div>
+  </aside>
+  <div class="stage">
+    <header class="top">
+      <div><h2 id="title"></h2><div class="sub" id="sub"></div></div>
+      <span class="sp"></span>
+      <div class="state" id="state"></div>
+      <button class="stamp" id="stamp" title="Mute her everywhere, instantly"></button>
+    </header>
+    <main id="main"></main>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+<script src="app.js"></script>
 </body>
 </html>

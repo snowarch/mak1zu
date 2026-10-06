@@ -220,6 +220,9 @@ func (s *Server) eventsStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	ch, cancel := s.Ev.Subscribe()
 	defer cancel()
+	// Browsers (Firefox in particular) hold back the first few KB of a stream;
+	// a comment preamble pushes the headers through immediately.
+	fmt.Fprintf(w, "retry: 3000\n: %s\n\n", strings.Repeat(" ", 2048))
 	last := since
 	send := func(e events.Event) {
 		if e.ID <= last {

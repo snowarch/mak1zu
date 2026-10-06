@@ -214,3 +214,17 @@ func TestPassingStepsCarryNoFixText(t *testing.T) {
 		}
 	}
 }
+
+func TestEveryAssetThePageReferencesIsServed(t *testing.T) {
+	s, _ := newServer(t)
+	page := do(s, "GET", "/", "", nil).Body.String()
+	for _, want := range []string{"app.css", "app.js", "logo.svg", "favicon.png"} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("index.html no longer references %s", want)
+		}
+		w := do(s, "GET", "/"+want, "", nil)
+		if w.Code != 200 || w.Body.Len() == 0 {
+			t.Errorf("%s: %d, %d bytes", want, w.Code, w.Body.Len())
+		}
+	}
+}
