@@ -63,7 +63,7 @@ func (l *Log) Add(r Record) {
 func (l *Log) Recent(n int, kind string) []Record {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	var out []Record
+	out := []Record{} // never nil: the panel iterates the JSON
 	for _, r := range l.ring {
 		if kind == "" || r.Kind == kind {
 			out = append(out, r)

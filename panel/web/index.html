@@ -31,6 +31,7 @@ main{max-width:920px;margin:0 auto;padding:20px 16px 80px}
 .row{display:grid;grid-template-columns:minmax(150px,230px) 1fr;gap:6px 14px;align-items:center;padding:5px 0}
 @media(max-width:600px){.row{grid-template-columns:1fr}}
 .row label{color:var(--mut);font-size:13px}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--shu);justify-self:start}
 input[type=text],input[type=number],input[type=password],select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
 input:focus,textarea:focus,select:focus{outline:2px solid var(--shu);outline-offset:0}
 textarea{min-height:90px;resize:vertical;font-family:ui-monospace,monospace;font-size:13px}
@@ -60,7 +61,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:5px 8px;b
 "use strict";
 const $=(s,r=document)=>r.querySelector(s);
 const h=(t,a={},...c)=>{const e=document.createElement(t);for(const[k,v]of Object.entries(a)){if(k==='class')e.className=v;else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(v!==false&&v!=null)e.setAttribute(k,v===true?'':v)}for(const x of c.flat())e.append(x?.nodeType?x:document.createTextNode(x??''));return e};
-let S=null,dirty={},tab=localStorage.getItem('tab')||'status';
+let S=null,dirty={},tab=(location.hash||'').slice(1)||localStorage.getItem('tab')||'status';
 const TABS=[['status','Status'],['persona','Persona'],['directives','Rules & skills'],['models','Models'],['behavior','Behavior'],['discord','Discord'],['tools','Tools'],['memory','Memory & log']];
 
 function toast(m,err){const t=$('#toast');t.textContent=m;t.className=err?'err':'';t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',err?6000:2200)}
@@ -94,7 +95,7 @@ function field(path,label,opts={}){
   }else if(typeof cur==='boolean'||opts.bool){
     el=h('input',{type:'checkbox',checked:!!cur,onchange:e=>setEdit(path,e.target.checked,e.target)});
   }else if(Array.isArray(cur)||opts.list){
-    el=h('textarea',{rows:3,placeholder:'one per line',oninput:e=>setEdit(path,e.target.value.split('\n').map(s=>s.trim()).filter(Boolean),e.target)},(cur||[]).join('\n'));
+    el=h('textarea',{rows:Math.max(2,Math.min(6,(cur||[]).length+1)),style:'min-height:0',placeholder:'one per line',oninput:e=>setEdit(path,e.target.value.split('\n').map(s=>s.trim()).filter(Boolean),e.target)},(cur||[]).join('\n'));
   }else if(typeof cur==='number'||opts.num){
     el=h('input',{type:'number',step:'any',value:cur??'',oninput:e=>{const v=e.target.value===''?0:Number(e.target.value);setEdit(path,v,e.target)}});
   }else{
@@ -135,7 +136,8 @@ const views={
       c.llm.providers[n].enabled?'':h('span',{class:'pill'},'disabled'),' ',
       S.cooldowns[n]?h('span',{class:'pill bad'},'cooling '+Math.ceil(S.cooldowns[n])+'s'):'',' ',c.llm.providers[n].model)))),
    h('div',{class:'card'},h('h3',{},'Discord'),h('div',{class:'row'},h('label',{},'token'),h('span',{class:'pill '+(S.discord_token_set?'ok':'bad')},S.discord_token_set?'set':'missing (set the env var)')),
-    h('div',{class:'row'},h('label',{},'tools'),h('span',{},(S.tools||[]).join(', ')||'—')))];
+    ),
+   h('div',{class:'card'},h('h3',{},'Tools'),h('div',{},(S.tools||[]).join(', ')||'—'))];
  },
  persona(){
   const sel=h('select',{onchange:e=>loadPersona(e.target.value)},S.personas.map(p=>h('option',{value:p,selected:p===S.active},p+(p===S.active?' (active)':''))));
@@ -185,7 +187,11 @@ const views={
    h('div',{class:'card'},h('h3',{},'Channels',h('small',{},'IDs, one per line')),
      field(d+'.home_channels','home (she talks freely)'),field(d+'.allowed_channels','allowed (empty = all)'),
      field(d+'.mention_only_channels','mention-only',{hint:'a real @mention wakes her; her name, replies and chatter never do'}),
-     field(d+'.peer_bots','peer bots (banter allowed in home)'))];
+     field(d+'.peer_bots','peer bots (banter allowed in home)')),
+   h('div',{class:'card'},h('h3',{},'Limits'),
+     field(d+'.only_guilds','only these servers',{hint:'server IDs; empty = every server she is in. DMs follow owner ID.'}),
+     field(d+'.human_webhooks','webhooks that are people',{hint:'webhook IDs of chat bridges; any other webhook counts as a bot'}),
+     field(d+'.register_commands','publish slash commands',{bool:true,hint:'turn off if another program shares this bot application'}))];
  },
  directives(){
   const KINDS={rules:['Rules','file name like 10-tone (a-z 0-9 _ -)','Always in her prompt, sorted by name.'],skills:['Skills','skill name like anime-recs','Know-how she reads on demand. Put description: in the front matter.'],servers:['Servers','server ID (numbers)','Applies only in that server.'],channels:['Channels','channel ID (numbers)','Applies only in that channel.']};
@@ -221,7 +227,7 @@ const views={
          try{await api('POST','/api/config/patch',{edits:{['tools.mcp_servers.'+nm.value]:{enabled:true,command:cm.value,args:[],allow:[],heavy:false}}});await refresh()}catch(e){toast(e.message,1)}}},'Add server'))})())];
  },
  async memory(){
-  const m=S.memory||{},t=await api('GET','/api/telemetry');
+  const m=S.memory||{},t=(await api('GET','/api/telemetry'))||[];
   return [h('div',{class:'card'},h('h3',{},'Memory'),h('div',{class:'kv'},Object.entries(m).map(([k,v])=>h('div',{},h('small',{},k),h('b',{},v))))),
    ...tree('memory',S.config.memory),
    h('div',{class:'card'},h('h3',{},'Recent turns & incidents'),
