@@ -1,0 +1,21 @@
+version: 2
+project_name: mak1zu
+builds:
+  - id: mak1zu
+    main: ./cmd/mak1zu
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{.Version}}"]
+archives:
+  - formats: [tar.gz]
+    files: [README.md, LICENSE, NOTICE, docs/PERSONA_TEMPLATE.md, ".makizu/{README.md,personas,rules,skills,servers,channels}/**/*"]
+nfpms:
+  - package_name: mak1zu
+    formats: [deb, rpm, archlinux]
+    maintainer: Mak1zu contributors
+    description: A companion you shape (Go engine, Discord, memory, panel, SDK).
+    license: Apache-2.0
+checksum:
+  name_template: checksums.txt

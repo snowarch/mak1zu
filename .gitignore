@@ -1,0 +1,12 @@
+/bin/
+/dist/
+.env
+data/
+config.json
+.makizu/config.json
+.makizu/.env
+.makizu/data/
+*.db
+*.db-wal
+*.db-shm
+__pycache__/

@@ -1,0 +1,20 @@
+# Arch/CachyOS: copy to its own directory as PKGBUILD. Unverified until a tagged release exists.
+pkgname=mak1zu
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='A companion you shape: Go engine with Discord, memory, web panel and SDK'
+arch=('x86_64' 'aarch64')
+url='https://github.com/snowarch/mak1zu'
+license=('Apache-2.0')
+makedepends=('go')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+build() {
+  cd "$pkgname-$pkgver"
+  CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$pkgver" -o mak1zu ./cmd/mak1zu
+}
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 mak1zu "$pkgdir/usr/bin/mak1zu"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
