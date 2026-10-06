@@ -24,16 +24,14 @@ Mak1zu comes from a private companion I built and ran for months in a Discord co
 
 ```bash
 go install github.com/snowarch/mak1zu/cmd/mak1zu@latest   # or: make build
-mak1zu init ~/mak1zu && cd ~/mak1zu
-$EDITOR .env            # MAK1ZU_API_KEY=...  (and MAK1ZU_DISCORD_TOKEN=... for Discord)
-set -a; . ./.env; set +a
-mak1zu doctor           # checks config, keys, persona, memory
+mak1zu init ~/mak1zu && cd ~/mak1zu   # pick a provider, paste the key (hidden), done
+mak1zu doctor           # a real call to your provider; if it fails, it says what to fix
 mak1zu chat             # talk to her in the terminal first
 mak1zu run              # Discord + panel at http://127.0.0.1:8787
 mak1zu service          # prints a hardened systemd user unit
 ```
 
-Local model, no key: add a provider in the panel (preset "Ollama (local)"), route `text` to it.
+Providers: OpenAI, Anthropic, Gemini, OpenRouter, Groq, DeepSeek, Mistral, opencode Go, and local Ollama or LM Studio (no key). Scripts: `mak1zu init --provider ollama`. Keys live in `.makizu/.env` (read automatically, never printed). Anything else that speaks the OpenAI API works by editing `base_url` and `model`.
 
 Discord setup: create a bot, enable **Message Content Intent**, invite it, set `discord.enabled`, `discord.owner_id`, and your channel IDs (as text) in the panel.
 

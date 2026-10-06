@@ -12,7 +12,9 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
+	"time"
 
 	makizu "github.com/snowarch/mak1zu"
 	"github.com/snowarch/mak1zu/config"
@@ -36,7 +38,7 @@ Usage:
   mak1zu init [dir]            create dir/.makizu with config, personas, rules and skills (default .)
   mak1zu run                   start the companion (Discord + web panel)
   mak1zu chat                  talk to her in the terminal
-  mak1zu doctor                check config, keys, persona and providers
+  mak1zu doctor [--offline]    check config, persona, memory and make a real call to each provider
   mak1zu persona list|check    list personas / validate the active one
   mak1zu eval <inputs.txt>     score the active persona's voice on a list of inputs
   mak1zu service               print a systemd user unit
@@ -49,6 +51,7 @@ func main() {
 	cfgPath := flag.String("c", "", "config file")
 	flag.Usage = func() { fmt.Fprintf(os.Stderr, usage, version) }
 	flag.Parse()
+	provider.UserAgent = "mak1zu/" + version + " (+https://github.com/snowarch/mak1zu)"
 	args := flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
@@ -59,11 +62,7 @@ func main() {
 	case "version":
 		fmt.Println("mak1zu", version)
 	case "init":
-		dir := "."
-		if len(args) > 1 {
-			dir = args[1]
-		}
-		err = cmdInit(dir)
+		err = cmdInitArgs(args[1:])
 	case "service":
 		err = cmdService(*cfgPath)
 	case "run", "chat", "doctor", "persona", "eval":
@@ -77,7 +76,7 @@ func main() {
 		case "chat":
 			err = cmdChat(st)
 		case "doctor":
-			err = cmdDoctor(st)
+			err = cmdDoctor(st, len(args) > 1 && args[1] == "--offline")
 		case "persona":
 			err = cmdPersona(st, args[1:])
 		case "eval":
@@ -127,10 +126,60 @@ func loadConfig(explicit string) (*config.Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	loadDotEnv(filepath.Join(filepath.Dir(p), ".env"))
 	return config.Load(p)
 }
 
-func cmdInit(dir string) error {
+// loadDotEnv reads KEY=VALUE lines from the .env next to config.json. Variables
+// already in the environment win, so systemd or an export always override it.
+func loadDotEnv(path string) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	for _, l := range strings.Split(string(b), "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" || strings.HasPrefix(l, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(l, "=")
+		k, v = strings.TrimSpace(strings.TrimPrefix(k, "export ")), strings.Trim(strings.TrimSpace(v), `"'`)
+		if ok && k != "" && v != "" && os.Getenv(k) == "" {
+			os.Setenv(k, v)
+		}
+	}
+}
+
+func cmdInitArgs(args []string) error {
+	fs := flag.NewFlagSet("init", flag.ContinueOnError)
+	preset := fs.String("provider", "", "provider preset id (openai, anthropic, gemini, openrouter, groq, deepseek, mistral, opencode-go, ollama, lmstudio)")
+	key := fs.String("key", "", "API key for the preset (prefer the hidden prompt: flags land in shell history)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	dir := "."
+	if fs.NArg() > 0 {
+		dir = fs.Arg(0)
+	}
+	var pr provider.Preset
+	switch {
+	case *preset != "":
+		p, ok := provider.PresetByID(*preset)
+		if !ok {
+			return fmt.Errorf("unknown provider %q", *preset)
+		}
+		pr = p
+	case isTTY(os.Stdin):
+		p, k, err := chooseProvider()
+		if err != nil {
+			return err
+		}
+		pr, *key = p, k
+	}
+	return cmdInit(dir, pr, *key)
+}
+
+func cmdInit(dir string, pr provider.Preset, key string) error {
 	home := filepath.Join(dir, ".makizu")
 	if err := os.MkdirAll(filepath.Join(home, "data"), 0o700); err != nil {
 		return err
@@ -139,7 +188,13 @@ func cmdInit(dir string) error {
 	if _, err := os.Stat(cfgPath); err == nil {
 		return fmt.Errorf("%s already exists; refusing to overwrite", cfgPath)
 	}
-	if err := config.New(cfgPath, config.Default()).Save(config.Default()); err != nil {
+	cfg := config.Default()
+	keyEnv := "MAK1ZU_API_KEY"
+	if pr.ID != "" {
+		cfg.LLM.Providers["main"] = pr.Provider()
+		keyEnv = pr.KeyEnv
+	}
+	if err := config.New(cfgPath, cfg).Save(cfg); err != nil {
 		return err
 	}
 	copied, kept := 0, 0
@@ -162,7 +217,11 @@ func cmdInit(dir string) error {
 	if err != nil {
 		return err
 	}
-	env := "# Secrets. Never commit this file. Load with: set -a; . ./.makizu/.env; set +a\nMAK1ZU_API_KEY=\nMAK1ZU_DISCORD_TOKEN=\n"
+	env := "# Secrets. Never commit this file. Load with: set -a; . ./.makizu/.env; set +a\n"
+	if keyEnv != "" {
+		env += keyEnv + "=" + key + "\n"
+	}
+	env += "MAK1ZU_DISCORD_TOKEN=\n"
 	if err := os.WriteFile(filepath.Join(home, ".env"), []byte(env), 0o600); err != nil {
 		return err
 	}
@@ -296,7 +355,7 @@ func cmdChat(st *config.Store) error {
 	return tr.Run(ctx, func(ctx context.Context, m sdk.Message) { e.Handle(ctx, m) })
 }
 
-func cmdDoctor(st *config.Store) error {
+func cmdDoctor(st *config.Store, offline bool) error {
 	cfg := st.Get()
 	ok := true
 	check := func(good bool, msg string) {
@@ -316,8 +375,23 @@ func cmdDoctor(st *config.Store) error {
 		}
 		seen[n] = true
 		p := cfg.LLM.Providers[n]
-		needs := p.APIKeyEnv != "" || p.APIKey != ""
-		check(!needs || p.Key() != "", fmt.Sprintf("provider %q has its key (env %s)", n, p.APIKeyEnv))
+		if offline {
+			needs := p.APIKeyEnv != "" || p.APIKey != ""
+			check(!needs || p.Key() != "", fmt.Sprintf("provider %q has its key (env %s)", n, p.APIKeyEnv))
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+		d := provider.Probe(ctx, n, p)
+		cancel()
+		if d.OK {
+			check(true, fmt.Sprintf("provider %q answers (%s, %s, %dms)", n, p.Model, d.Reply, d.Latency.Milliseconds()))
+			continue
+		}
+		check(false, fmt.Sprintf("provider %q: %s", n, d.Problem))
+		fmt.Printf("       fix: %s\n", d.Fix)
+		if len(d.Models) > 0 {
+			fmt.Printf("       it does serve: %s\n", strings.Join(d.Models, ", "))
+		}
 	}
 	if cfg.Discord.Enabled {
 		check(cfg.Discord.BotToken() != "", "discord token present")

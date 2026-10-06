@@ -60,13 +60,7 @@ func (h *HTTP) Complete(ctx context.Context, r Request) (Response, error) {
 	if err != nil {
 		return Response{}, &Error{Kind: KindBadRequest, Provider: h.Name, Msg: err.Error()}
 	}
-	req.Header.Set("Content-Type", "application/json")
-	if k := h.Cfg.Key(); k != "" {
-		req.Header.Set("Authorization", "Bearer "+k)
-	}
-	for k, v := range h.Cfg.Headers {
-		req.Header.Set(k, v)
-	}
+	h.decorate(req)
 	resp, err := h.HC.Do(req)
 	if err != nil {
 		if errors.Is(ctx.Err(), context.Canceled) {
@@ -99,6 +93,22 @@ func (h *HTTP) Complete(ctx context.Context, r Request) (Response, error) {
 	}
 	out.Provider, out.Model, out.Latency = h.Name, h.Cfg.Model, time.Since(start)
 	return out, nil
+}
+
+// decorate sets the headers every request carries: content type, key, an honest
+// user agent, the host's own quirks, then the user's overrides.
+func (h *HTTP) decorate(req *http.Request) {
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", UserAgent)
+	if k := h.Cfg.Key(); k != "" {
+		req.Header.Set("Authorization", "Bearer "+k)
+	}
+	for k, v := range quirkHeaders(h.Cfg.BaseURL) {
+		req.Header.Set(k, v)
+	}
+	for k, v := range h.Cfg.Headers {
+		req.Header.Set(k, v)
+	}
 }
 
 func classify(status int, body []byte) Kind {
