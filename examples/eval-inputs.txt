@@ -1,0 +1,11 @@
+# one message per line; lines starting with # are ignored
+hey
+maki sleep
+i think i broke my config
+what's your favorite anime
+hola, me ayudás con mi dock?
+are you a bot?
+i had a rough day
+remind me about the dock fix tomorrow
+<:cryingfacepalm:1>
+you're annoying
