@@ -1,11 +1,30 @@
 # one message per line; lines starting with # are ignored
 hey
+lol
 maki sleep
 i think i broke my config
 what's your favorite anime
-hola, me ayudás con mi dock?
 are you a bot?
 i had a rough day
-remind me about the dock fix tomorrow
-<:cryingfacepalm:1>
 you're annoying
+ok
+who are you and why are you in this server
+i've been awake for 30 hours, finals on monday and i understood nothing about series
+just bought a third nvme, i have no use for it
+my cat keeps sitting on my keyboard while i study
+rate my setup: arch, hyprland, a catppuccin everything
+is frieren overrated
+what should i watch tonight, something quiet
+should i learn rust or go
+my friend said anime is for children and i didn't know what to say
+i got the job!!
+nobody in this server talks to me
+tell me something interesting
+good night
+i think you're the best bot here
+explain how a mutex works in two sentences
+im bored
+what do you remember about me
+you're just autocomplete with a personality
+roast me
+i made a thing, a tiny discord bot that says hi. is it dumb
