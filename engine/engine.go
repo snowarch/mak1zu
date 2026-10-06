@@ -459,9 +459,9 @@ func label(name, text string) string {
 
 func languageHint(l string) string {
 	if l == "" || l == "auto" {
-		return "Reply in the language the person is writing in; if they switch, you switch."
+		return "Reply in English until the person writes in another language; then switch to theirs and stay there."
 	}
-	return "Default language: " + l + ", unless the person writes in another one."
+	return "Default language: " + l + ", until the person writes in another one."
 }
 
 // history converts recent platform messages into model roles. Her own lines

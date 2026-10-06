@@ -22,7 +22,7 @@ type Persona struct {
 	ID          string
 	Name        string
 	Pronouns    string
-	Language    string  // "" or "auto" mirrors the speaker
+	Language    string  // "" or "auto" = English until the speaker writes another language
 	Temperature float64 // 0 = use global
 	Substrate   bool    // include the shared human-writing substrate
 	Mood        bool    // run the mood engine for this character

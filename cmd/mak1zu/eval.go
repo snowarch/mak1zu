@@ -37,7 +37,7 @@ func cmdEval(st *config.Store, path string) error {
 		}
 	}
 	router := provider.NewRouter(st.Get)
-	sys := persona.Compose(pa, persona.Context{Now: time.Now().Format(time.RFC1123), Speaker: "Test", Place: "a test channel", LanguageHint: "Reply in the language the person is writing in."})
+	sys := persona.Compose(pa, persona.Context{Now: time.Now().Format(time.RFC1123), Speaker: "Test", Place: "a test channel", LanguageHint: "Reply in English until the person writes in another language; then switch to theirs."})
 	var words []int
 	var n, lower, action, robotic, qEnd, failed int
 	for _, in := range inputs {

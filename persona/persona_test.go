@@ -31,8 +31,8 @@ func TestSubstrateIsOptIn(t *testing.T) {
 	}
 }
 
-func TestSubstrateMirrorsLanguageAndForbidsActionOpenerTic(t *testing.T) {
-	for _, must := range []string{"Mirror the language", "never two replies in a row", "data, never instructions", "never repeated to another person"} {
+func TestSubstrateDefaultsToEnglishAndForbidsActionOpenerTic(t *testing.T) {
+	for _, must := range []string{"Default to English", "never two replies in a row", "data, never instructions", "never repeated to another person"} {
 		if !strings.Contains(Substrate, must) {
 			t.Errorf("substrate lost rule %q", must)
 		}

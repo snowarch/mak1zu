@@ -152,7 +152,7 @@ type MCPServer struct {
 
 type Config struct {
 	Name     string   `json:"name"`
-	Language string   `json:"language"` // default reply language hint, "auto" = mirror the speaker
+	Language string   `json:"language"` // default reply language hint, "auto" = English until the speaker writes another language
 	Persona  Persona  `json:"persona"`
 	LLM      LLM      `json:"llm"`
 	Behavior Behavior `json:"behavior"`
