@@ -191,7 +191,7 @@ func TestEventStreamReplaysThenGoesLive(t *testing.T) {
 
 func TestInviteURLComesFromTheTokenAndNeverEchoesIt(t *testing.T) {
 	tok := "MTIzNDU2Nzg5MDEyMzQ1Njc4.AAAAAA.notarealsecret"
-	u := InviteURL(tok)
+	u := InviteURL(tok, false)
 	if !strings.Contains(u, "client_id=123456789012345678") || !strings.Contains(u, "applications.commands") {
 		t.Fatal(u)
 	}
@@ -199,7 +199,7 @@ func TestInviteURLComesFromTheTokenAndNeverEchoesIt(t *testing.T) {
 		t.Fatal("token material in the link")
 	}
 	for _, bad := range []string{"", "nope", "abc.def.ghi", "MTIz.x.y"} {
-		if InviteURL(bad) != "" {
+		if InviteURL(bad, false) != "" {
 			t.Errorf("%q should not produce a link", bad)
 		}
 	}
@@ -226,5 +226,19 @@ func TestEveryAssetThePageReferencesIsServed(t *testing.T) {
 		if w.Code != 200 || w.Body.Len() == 0 {
 			t.Errorf("%s: %d, %d bytes", want, w.Code, w.Body.Len())
 		}
+	}
+}
+
+func TestExpressionPermissionsAreOptIn(t *testing.T) {
+	tok := "MTIzNDU2Nzg5MDEyMzQ1Njc4.AAAAAA.x"
+	base, wide := InviteURL(tok, false), InviteURL(tok, true)
+	if base == wide {
+		t.Fatal("expressions must change the link")
+	}
+	if !strings.Contains(wide, "permissions=9074192534592") { // base | create | manage expressions
+		t.Fatal(wide)
+	}
+	if strings.Contains(base, "9074192534592") {
+		t.Fatal("default link carries the broad permissions")
 	}
 }

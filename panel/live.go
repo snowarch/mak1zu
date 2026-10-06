@@ -66,10 +66,14 @@ func Checklist(cfg config.Config) []Step {
 // embeds, files, history, reactions, external emoji and slash commands.
 const invitePerms = 277025770560
 
+// expressionPerms lets her upload and manage her own server emoji. They are
+// broad, so the invite link only carries them when asked.
+const expressionPerms = 1<<43 | 1<<30
+
 // InviteURL builds the "add her to a server" link from the bot token alone: the
 // token's first segment is the base64 of the bot's own user ID. It returns ""
 // when the token does not look like one. The token itself is never echoed.
-func InviteURL(token string) string {
+func InviteURL(token string, expressions bool) string {
 	seg, _, ok := strings.Cut(token, ".")
 	if !ok {
 		return ""
@@ -83,7 +87,11 @@ func InviteURL(token string) string {
 			return ""
 		}
 	}
-	return fmt.Sprintf("https://discord.com/oauth2/authorize?client_id=%s&scope=bot%%20applications.commands&permissions=%d", raw, invitePerms)
+	perms := int64(invitePerms)
+	if expressions {
+		perms |= expressionPerms
+	}
+	return fmt.Sprintf("https://discord.com/oauth2/authorize?client_id=%s&scope=bot%%20applications.commands&permissions=%d", raw, perms)
 }
 
 func orDefault(s, d string) string {

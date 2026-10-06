@@ -93,3 +93,6 @@ func (e *Engine) Preview(ctx context.Context, speaker string, convo []PreviewTur
 
 // Mood describes her current mood in a few words ("" when baseline).
 func (e *Engine) Mood() string { return e.mood.Describe() }
+
+// MoodState is Mood as data.
+func (e *Engine) MoodState() persona.MoodState { return e.mood.Snapshot() }

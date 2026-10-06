@@ -329,9 +329,12 @@ views.rooms=()=>{
   const out=[];
   out.push(h('p',{class:'lead'},'Rooms are where she may talk. She answers a direct call anywhere she is invited, but only joins in uninvited in her home channels.'));
   if(S.invite_url){
+    const wide=ls.get('inv-wide')==='1',url=wide?S.invite_url_expressions:S.invite_url;
     out.push(h('div',{class:'card'},h('h3',{},'Add her to a server'),h('p',{class:'lead'},'Built from your bot token, with exactly the permissions she uses. Enable Message Content Intent for the bot in the Discord developer portal first, or she will not see messages.'),
-      h('div',{class:'actions'},h('a',{class:'btn pri',href:S.invite_url,target:'_blank',rel:'noopener',style:'text-decoration:none'},'Open invite link'),
-        h('button',{class:'btn',onclick:()=>navigator.clipboard?.writeText(S.invite_url).then(()=>toast('Copied'))},'Copy link'))));
+      h('div',{class:'set'},h('div',{},h('div',{class:'lbl'},'Let her upload and manage her own emoji'),h('div',{class:'help'},'Adds Create Expressions and Manage Expressions. These are broad: she could also delete emoji in that server. Only needed if she should use her own face as emoji.')),
+        h('div',{class:'ctl'},h('label',{class:'switch'},h('input',{type:'checkbox',checked:wide,onchange:e=>{ls.set('inv-wide',e.target.checked?'1':'0');go('rooms')}}),h('span')))),
+      h('div',{class:'actions'},h('a',{class:'btn pri',href:url,target:'_blank',rel:'noopener',style:'text-decoration:none'},'Open invite link'),
+        h('button',{class:'btn',onclick:()=>navigator.clipboard?.writeText(url).then(()=>toast('Copied'))},'Copy link'))));
   }else if(S.config.discord.enabled){
     out.push(h('div',{class:'card'},h('h3',{},'Add her to a server'),h('p',{class:'lead'},'No bot token found yet. Put it in .makizu/.env as '+(S.config.discord.token_env||'MAK1ZU_DISCORD_TOKEN')+' and restart. The invite link appears here.')));
   }

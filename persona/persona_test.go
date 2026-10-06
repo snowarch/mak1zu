@@ -65,3 +65,25 @@ func TestLibraryRejectsTraversal(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestMoodSnapshotUsesClosedNamesAndGrows(t *testing.T) {
+	m := NewMood()
+	if s := m.Snapshot(); s.Name != "neutral" || s.Intensity != 0 {
+		t.Fatalf("%+v", s)
+	}
+	m.Valence = 0.3
+	low := m.Snapshot()
+	m.Valence = 1
+	high := m.Snapshot()
+	if low.Name != "amused" || high.Name != "amused" || !(high.Intensity > low.Intensity) || high.Intensity > 1 {
+		t.Fatalf("%+v %+v", low, high)
+	}
+	m.Valence, m.Energy = -0.9, 0.1
+	if s := m.Snapshot(); s.Name != "irritated" && s.Name != "sleepy" {
+		t.Fatalf("%+v", s)
+	}
+	m.Valence, m.Energy = 0, 0.9
+	if s := m.Snapshot(); s.Name != "wired" {
+		t.Fatalf("%+v", s)
+	}
+}

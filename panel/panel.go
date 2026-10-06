@@ -42,10 +42,11 @@ type Server struct {
 	Ev     *events.Hub
 	// Mood describes her current mood; Preview answers a test chat message with
 	// the live persona. Both are optional seams wired by main.
-	Mood    func() string
-	Preview func(ctx context.Context, speaker string, convo []engine.PreviewTurn) (engine.PreviewResult, error)
-	Version string
-	Started time.Time
+	Mood      func() string
+	MoodState func() persona.MoodState
+	Preview   func(ctx context.Context, speaker string, convo []engine.PreviewTurn) (engine.PreviewResult, error)
+	Version   string
+	Started   time.Time
 	// Test seam: build a client for the provider test button.
 	NewClient func(name string, p config.Provider) provider.Client
 }
@@ -153,14 +154,20 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	if s.Mood != nil {
 		mood = s.Mood()
 	}
+	var ms persona.MoodState
+	if s.MoodState != nil {
+		ms = s.MoodState()
+	} else {
+		ms = persona.MoodState{Name: "neutral"}
+	}
 	up := int64(0)
 	if !s.Started.IsZero() {
 		up = int64(time.Since(s.Started).Seconds())
 	}
 	writeJSON(w, 200, map[string]any{
-		"paused": cfg.Behavior.Paused, "mood": mood, "uptime_s": up, "version": s.Version,
-		"invite_url": InviteURL(cfg.Discord.BotToken()),
-		"checklist":  Checklist(cfg), "activity": s.recentActivity(),
+		"paused": cfg.Behavior.Paused, "mood": mood, "mood_state": ms, "uptime_s": up, "version": s.Version,
+		"invite_url": InviteURL(cfg.Discord.BotToken(), false), "invite_url_expressions": InviteURL(cfg.Discord.BotToken(), true),
+		"checklist": Checklist(cfg), "activity": s.recentActivity(),
 		"config": cfg.Redacted(), "personas": s.Lib().List(), "active": cfg.Persona.Active,
 		"cooldowns": cool, "memory": stats, "has_key": hasKey, "tools": tools,
 		"discord_token_set": cfg.Discord.BotToken() != "",

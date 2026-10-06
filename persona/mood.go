@@ -83,6 +83,33 @@ func (m *Mood) Observe(author, text string, direct bool) {
 	}
 }
 
+// MoodState is the mood as data: one dominant name from a closed set plus how
+// strongly it holds, for things that react to her mood (the avatar, the panel).
+type MoodState struct {
+	Name      string  `json:"name"`      // neutral | amused | irritated | sleepy | wired
+	Intensity float64 `json:"intensity"` // 0..1, 0 for neutral
+	Valence   float64 `json:"valence"`
+	Energy    float64 `json:"energy"`
+}
+
+// Snapshot reports the dominant mood using the same thresholds as Describe.
+func (m *Mood) Snapshot() MoodState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	st := MoodState{Name: "neutral", Valence: m.Valence, Energy: m.Energy}
+	score := func(over, span float64) float64 { return clamp(0.3+over/span*0.7, 0.3, 1) }
+	try := func(name string, ok bool, in float64) {
+		if ok && in > st.Intensity {
+			st.Name, st.Intensity = name, in
+		}
+	}
+	try("amused", m.Valence > 0.25, score(m.Valence-0.25, 0.75))
+	try("irritated", m.Valence < -0.25, score(-m.Valence-0.25, 0.75))
+	try("wired", m.Energy > 0.75, score(m.Energy-0.75, 0.25))
+	try("sleepy", m.Energy < 0.3, score(0.3-m.Energy, 0.25))
+	return st
+}
+
 // Describe returns a short natural-language mood, "" when baseline.
 func (m *Mood) Describe() string {
 	m.mu.Lock()
