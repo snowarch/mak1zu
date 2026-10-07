@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"flag"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -274,5 +275,15 @@ func TestInitWritesTheKeyToEnvAndNeverToConfig(t *testing.T) {
 	}
 	if err := cmdInitArgs([]string{dir}); err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("a second init must refuse before asking anything: %v", err)
+	}
+}
+
+func TestFlagsMayComeAfterThePositionalArguments(t *testing.T) {
+	fs := flag.NewFlagSet("x", flag.ContinueOnError)
+	rules := fs.String("rules", "", "")
+	yes := fs.Bool("yes", false, "")
+	pos, err := parse(fs, []string{"maki", "--rules", "a,b", "out.tar.gz", "--yes"})
+	if err != nil || len(pos) != 2 || pos[0] != "maki" || pos[1] != "out.tar.gz" || *rules != "a,b" || !*yes {
+		t.Fatalf("%v %v rules=%q yes=%v", pos, err, *rules, *yes)
 	}
 }

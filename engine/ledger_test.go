@@ -26,7 +26,7 @@ func TestAgoSpeaksLikeAPerson(t *testing.T) {
 func TestMemoryProvenanceShowsOnlyWhenItIsElsewhere(t *testing.T) {
 	now := time.Now()
 	m := memory.Memory{Content: "Ren is learning Go", Source: "cli", Created: now.Add(-72 * time.Hour).UTC().Format(time.RFC3339)}
-	if got := describeMemory(m, "discord", now); got != "Ren is learning Go (told on cli, 3 days ago)" {
+	if got := describeMemory(m, "discord", now); got != "Ren is learning Go (told on the terminal, 3 days ago)" {
 		t.Fatal(got)
 	}
 	if got := describeMemory(m, "cli", now); got != "Ren is learning Go (3 days ago)" {
@@ -49,7 +49,7 @@ func TestLedgerReachesPromptAndBitRestsAfterCallback(t *testing.T) {
 
 	e.Handle(ctx, dmFrom("2", "u1", "Alice", "so, what do I learn at night, and the exam"))
 	sys := sc.reqs[len(sc.reqs)-1].System
-	for _, want := range []string{"<open_threads>", "exam is thursday", "<running_bits>", "the toaster incident", "told on cli"} {
+	for _, want := range []string{"<open_threads>", "exam is thursday", "<running_bits>", "the toaster incident", "told on the terminal"} {
 		if !strings.Contains(sys, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, sys)
 		}

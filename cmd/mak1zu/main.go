@@ -54,7 +54,14 @@ Usage:
                                "mak1zu run", or starts her itself if none is running
   mak1zu chat                  plain line-by-line chat, for scripts and persona work
   mak1zu doctor [--offline]    check config, persona, memory and make a real call to each provider
-  mak1zu persona list|check    list personas / validate the active one
+  mak1zu persona list|check|use ID
+                               list personas, validate the active one, switch to another
+  mak1zu persona distill EXPORT [--as NAME]
+                               learn a character from somebody's real messages (Discord, WhatsApp, text),
+                               measured and tested until it sounds like them
+  mak1zu persona pack ID [FILE] / install SOURCE
+                               share a character as a folder or .tar.gz (or install one: a folder, a file,
+                               user/repo, an https git address); it shows you what is inside first
   mak1zu eval [--gate] [inputs.txt]
                                say things to her and score how she sounds against the targets in her voice.json;
                                --gate exits 1 when she is outside them (inputs: the file, her eval.txt, or a built-in spread)
@@ -536,14 +543,14 @@ func cmdLink(st *config.Store, args []string) error {
 	defer mem.Close()
 	ctx := context.Background()
 	if len(args) > 0 {
-		p, err := mem.Link(ctx, "cli", "user", "you", args[0])
+		p, err := mem.Link(ctx, "local", "local", "you", args[0])
 		if err != nil {
 			return err
 		}
 		fmt.Printf("linked: the terminal is %s now, one memory\n", p.Display())
 		return nil
 	}
-	p, err := mem.Resolve(ctx, "cli", "user", "you")
+	p, err := mem.Resolve(ctx, "local", "local", "you")
 	if err != nil {
 		return err
 	}

@@ -28,7 +28,7 @@ func New(in io.Reader, out io.Writer, user, bot string) *Transport {
 	return &Transport{In: in, Out: out, User: user, BotName: bot}
 }
 
-func (t *Transport) Name() string                         { return "cli" }
+func (t *Transport) Name() string                         { return "local" } // the same person as the terminal chat and the web chat
 func (t *Transport) Local() bool                          { return true }
 func (t *Transport) Self() sdk.Identity                   { return sdk.Identity{ID: "bot", Name: t.BotName} }
 func (t *Transport) Typing(context.Context, string) error { return nil }
@@ -71,7 +71,7 @@ func (t *Transport) Run(ctx context.Context, h sdk.Handler) error {
 		}
 		t.mu.Lock()
 		t.n++
-		m := sdk.Message{Transport: "cli", ID: fmt.Sprint("u", t.n), ChannelID: "cli", AuthorID: "user", AuthorName: t.User, Content: line, IsDM: true, Time: time.Now()}
+		m := sdk.Message{Transport: "local", ID: fmt.Sprint("u", t.n), ChannelID: "main", AuthorID: "local", AuthorName: t.User, Content: line, IsDM: true, Time: time.Now()}
 		t.hist = append(t.hist, m)
 		t.mu.Unlock()
 		h(ctx, m)

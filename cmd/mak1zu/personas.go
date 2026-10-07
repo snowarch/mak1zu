@@ -30,6 +30,23 @@ func ask(yes bool, summary, question string) bool {
 	return false
 }
 
+// parse reads flags that may come before or after the positional arguments
+// ("persona pack maki --rules x out.tar.gz"), which the flag package alone
+// would silently stop at.
+func parse(fs *flag.FlagSet, args []string) ([]string, error) {
+	var pos []string
+	for {
+		if err := fs.Parse(args); err != nil {
+			return nil, err
+		}
+		if fs.NArg() == 0 {
+			return pos, nil
+		}
+		pos = append(pos, fs.Arg(0))
+		args = fs.Args()[1:]
+	}
+}
+
 func cmdDistill(st *config.Store, lib persona.Library, args []string) error {
 	fs := flag.NewFlagSet("persona distill", flag.ContinueOnError)
 	as := fs.String("as", "", "whose messages to learn (default: whoever wrote the most)")
@@ -51,14 +68,15 @@ after you say yes.
 `)
 		fs.PrintDefaults()
 	}
-	if err := fs.Parse(args); err != nil {
+	pos, err := parse(fs, args)
+	if err != nil {
 		return err
 	}
-	if fs.NArg() != 1 {
+	if len(pos) != 1 {
 		fs.Usage()
 		return errors.New("give me one export file")
 	}
-	msgs, err := distill.Load(fs.Arg(0))
+	msgs, err := distill.Load(pos[0])
 	if err != nil {
 		return err
 	}
@@ -92,16 +110,17 @@ func cmdPack(st *config.Store, lib persona.Library, args []string) error {
 	fs := flag.NewFlagSet("persona pack", flag.ContinueOnError)
 	skills := fs.String("skills", "", "comma-separated skills to include")
 	rules := fs.String("rules", "", "comma-separated house rules to include")
-	if err := fs.Parse(args); err != nil {
+	pos, err := parse(fs, args)
+	if err != nil {
 		return err
 	}
-	if fs.NArg() < 1 {
+	if len(pos) < 1 || len(pos) > 2 {
 		return errors.New("usage: mak1zu persona pack ID [--skills a,b] [--rules x,y] [FILE.tar.gz]")
 	}
-	id := fs.Arg(0)
+	id := pos[0]
 	out := id + ".tar.gz"
-	if fs.NArg() > 1 {
-		out = fs.Arg(1)
+	if len(pos) > 1 {
+		out = pos[1]
 	}
 	f, err := os.OpenFile(out, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o644)
 	if err != nil {
@@ -133,13 +152,14 @@ func cmdInstall(st *config.Store, lib persona.Library, args []string) error {
 	fs := flag.NewFlagSet("persona install", flag.ContinueOnError)
 	yes := fs.Bool("yes", false, "do not ask")
 	force := fs.Bool("force", false, "replace what already exists (the old versions go to .makizu/.backup)")
-	if err := fs.Parse(args); err != nil {
+	pos, err := parse(fs, args)
+	if err != nil {
 		return err
 	}
-	if fs.NArg() != 1 {
+	if len(pos) != 1 {
 		return errors.New("usage: mak1zu persona install [--yes] [--force] FOLDER | FILE.tar.gz | user/repo | https://git-address")
 	}
-	p, cleanup, err := pack.Fetch(fs.Arg(0))
+	p, cleanup, err := pack.Fetch(pos[0])
 	if err != nil {
 		return err
 	}

@@ -29,14 +29,22 @@ func ago(then, now time.Time) string {
 // describeMemory is one recalled memory with its provenance: how long ago, and
 // where, when that is not the place they are talking now. This is what lets her
 // say "you told me on the terminal" and be right.
+// where says a transport in words: "local" (and the old "cli") is the terminal.
+func where(transport string) string {
+	if transport == "local" || transport == "cli" {
+		return "the terminal"
+	}
+	return transport
+}
+
 func describeMemory(m memory.Memory, here string, now time.Time) string {
 	t, err := time.Parse(time.RFC3339, m.Created)
 	if err != nil {
 		return m.Content
 	}
 	when := ago(t, now)
-	if m.Source != "" && m.Source != here {
-		return fmt.Sprintf("%s (told on %s, %s)", m.Content, m.Source, when)
+	if m.Source != "" && where(m.Source) != where(here) {
+		return fmt.Sprintf("%s (told on %s, %s)", m.Content, where(m.Source), when)
 	}
 	return fmt.Sprintf("%s (%s)", m.Content, when)
 }
