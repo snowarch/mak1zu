@@ -121,6 +121,10 @@ func (e *Engine) nightFor(ctx context.Context, pa persona.Persona, personID stri
 	var b strings.Builder
 	b.WriteString("<conversations>\n")
 	for _, t := range turns {
+		if t.UserMsg == "" { // she wrote first
+			fmt.Fprintf(&b, "(you wrote first)\nyou: %s\n", clip(t.Reply, 300))
+			continue
+		}
 		fmt.Fprintf(&b, "%s: %s\nyou: %s\n", per.Display(), clip(t.UserMsg, 300), clip(t.Reply, 300))
 	}
 	b.WriteString("</conversations>\n<what_you_remember>\n")

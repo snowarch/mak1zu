@@ -23,17 +23,23 @@ const RoleOwner = "owner"
 
 // Person is who someone is to her, independent of any platform.
 type Person struct {
-	ID        string
-	Name      string // the platform display name last seen
-	CallMe    string // what they asked to be called; wins over Name
-	Pronouns  string
-	Language  string
-	TZ        string
-	Role      string // "" or RoleOwner
-	Checkins  string // "off" when they asked her not to start conversations
-	Quiet     string // "23:00-08:00": hours she must not message them
-	FirstSeen string
-	LastSeen  string
+	ID       string
+	Name     string // the platform display name last seen
+	CallMe   string // what they asked to be called; wins over Name
+	Pronouns string
+	Language string
+	TZ       string
+	Role     string // "" or RoleOwner
+	Checkins string // "off" when they asked her not to start conversations
+	Quiet    string // "23:00-08:00": hours she must not message them
+
+	// Where a private conversation last happened, so she can start the next one
+	// there; and how often she has reached out without an answer.
+	RouteTransport, RouteChannel string
+	LastNudge                    string
+	NudgeStreak                  int
+	FirstSeen                    string
+	LastSeen                     string
 }
 
 // Display is the name she uses for them.
@@ -66,9 +72,11 @@ CREATE TABLE IF NOT EXISTS link_codes(
 // migrate adds columns that databases created by older versions lack. Old
 // rows keep their ids: a legacy user id simply becomes a person id.
 func migrate(db *sql.DB) error {
-	for table, cols := range map[string][]string{
-		"people":   {"call_me", "pronouns", "language", "tz", "role", "checkins", "quiet"},
-		"memories": {"source"},
+	const text, num = `TEXT NOT NULL DEFAULT ''`, `INTEGER NOT NULL DEFAULT 0`
+	for table, cols := range map[string]map[string]string{
+		"people": {"call_me": text, "pronouns": text, "language": text, "tz": text, "role": text, "checkins": text, "quiet": text,
+			"route_transport": text, "route_channel": text, "last_nudge": text, "nudge_streak": num},
+		"memories": {"source": text},
 	} {
 		have := map[string]bool{}
 		rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
@@ -86,9 +94,9 @@ func migrate(db *sql.DB) error {
 			have[name] = true
 		}
 		rows.Close()
-		for _, c := range cols {
+		for c, typ := range cols {
 			if !have[c] {
-				if _, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + c + ` TEXT NOT NULL DEFAULT ''`); err != nil {
+				if _, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + c + ` ` + typ); err != nil {
 					return err
 				}
 			}
@@ -97,11 +105,11 @@ func migrate(db *sql.DB) error {
 	return nil
 }
 
-const personCols = `user_id,name,call_me,pronouns,language,tz,role,checkins,quiet,first_seen,last_seen`
+const personCols = `user_id,name,call_me,pronouns,language,tz,role,checkins,quiet,route_transport,route_channel,last_nudge,nudge_streak,first_seen,last_seen`
 
 func scanPerson(r interface{ Scan(...any) error }) (Person, error) {
 	var p Person
-	err := r.Scan(&p.ID, &p.Name, &p.CallMe, &p.Pronouns, &p.Language, &p.TZ, &p.Role, &p.Checkins, &p.Quiet, &p.FirstSeen, &p.LastSeen)
+	err := r.Scan(&p.ID, &p.Name, &p.CallMe, &p.Pronouns, &p.Language, &p.TZ, &p.Role, &p.Checkins, &p.Quiet, &p.RouteTransport, &p.RouteChannel, &p.LastNudge, &p.NudgeStreak, &p.FirstSeen, &p.LastSeen)
 	return p, err
 }
 
@@ -506,9 +514,61 @@ func mergePersons(ctx context.Context, tx *sql.Tx, src, dst string) error {
 		role=CASE WHEN role='' THEN (SELECT role FROM people WHERE user_id=?) ELSE role END,
 		checkins=CASE WHEN checkins='' OR (checkins='on' AND (SELECT checkins FROM people WHERE user_id=?)='off') THEN (SELECT checkins FROM people WHERE user_id=?) ELSE checkins END,
 		quiet=CASE WHEN quiet='' THEN (SELECT quiet FROM people WHERE user_id=?) ELSE quiet END,
+		route_transport=CASE WHEN route_channel='' THEN (SELECT route_transport FROM people WHERE user_id=?) ELSE route_transport END,
+		route_channel=CASE WHEN route_channel='' THEN (SELECT route_channel FROM people WHERE user_id=?) ELSE route_channel END,
+		nudge_streak=max(nudge_streak,(SELECT nudge_streak FROM people WHERE user_id=?)),
+		last_nudge=max(last_nudge,(SELECT last_nudge FROM people WHERE user_id=?)),
 		first_seen=min(first_seen,(SELECT first_seen FROM people WHERE user_id=?))
-		WHERE user_id=?`, src, src, src, src, src, src, src, src, src, dst); err != nil {
+		WHERE user_id=?`, src, src, src, src, src, src, src, src, src, src, src, src, src, dst); err != nil {
 		return err
 	}
 	return exec(`DELETE FROM people WHERE user_id=?`, src)
+}
+
+// SetRoute remembers where the last private conversation with this person
+// happened. Only private places belong here: it is where she may start the
+// next one.
+func (s *Store) SetRoute(ctx context.Context, personID, transport, channel string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE people SET route_transport=?, route_channel=? WHERE user_id=?`, transport, channel, personID)
+	return err
+}
+
+// Answered clears the unanswered-nudge count: they talked to her.
+func (s *Store) Answered(ctx context.Context, personID string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE people SET nudge_streak=0 WHERE user_id=? AND nudge_streak!=0`, personID)
+	return err
+}
+
+// RecordNudge notes that she reached out first.
+func (s *Store) RecordNudge(ctx context.Context, personID string, at time.Time) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE people SET last_nudge=?, nudge_streak=nudge_streak+1 WHERE user_id=?`, at.UTC().Format(time.RFC3339), personID)
+	return err
+}
+
+// LastTurn is when they last talked to her ("" never).
+func (s *Store) LastTurn(ctx context.Context, personID string) (time.Time, bool) {
+	var ts sql.NullString
+	_ = s.db.QueryRowContext(ctx, `SELECT max(ts) FROM turns WHERE user_id=?`, personID).Scan(&ts)
+	t, err := time.Parse(time.RFC3339, ts.String)
+	return t, err == nil
+}
+
+// WithUnsaid lists people who have something waiting to be said, and a private
+// route to say it on.
+func (s *Store) WithUnsaid(ctx context.Context, persona string, at time.Time) ([]Person, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+personCols+` FROM people WHERE route_channel!='' AND user_id IN
+		(SELECT person_id FROM unsaid WHERE persona=? AND said='' AND expires>?) ORDER BY last_seen DESC`, persona, at.UTC().Format(time.RFC3339))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Person
+	for rows.Next() {
+		p, err := scanPerson(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }

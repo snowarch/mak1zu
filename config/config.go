@@ -86,6 +86,10 @@ type Behavior struct {
 	Retry    bool     `json:"retry_transient"`
 	// Paused is the kill switch: she hears everything and answers nothing.
 	Paused bool `json:"paused"`
+	// Proactive lets her start a private conversation (say what the night shift
+	// left on her mind). Off by default; bounded by quiet hours, a daily cap,
+	// back-off when ignored and each person's own "stop".
+	Proactive bool `json:"proactive"`
 }
 
 type Persona struct {

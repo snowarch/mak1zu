@@ -125,6 +125,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	go e.reminderLoop(ctx)
 	go e.maintenanceLoop(ctx)
 	go e.nightLoop(ctx)
+	go e.presenceLoop(ctx)
 	go func() { e.Sleep(ctx, 10*time.Second); e.Catchup(ctx) }()
 	return e.Tr.Run(ctx, func(ctx context.Context, m sdk.Message) { go e.Handle(ctx, m) })
 }
@@ -280,6 +281,10 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	private := m.IsDM || e.isLocal() // what is about one person's life is only raised in private
 	threads, bits := e.ledgerLines(ctx, pa.ID, per, private)
 	onMind, mindIDs := e.mindLines(ctx, pa.ID, per, private)
+	_ = e.Mem.Answered(ctx, per.ID) // they talked to her: any unanswered nudge is answered
+	if private {
+		_ = e.Mem.SetRoute(ctx, per.ID, e.Tr.Name(), m.ChannelID)
+	}
 
 	pctx := persona.Context{
 		Now: time.Now().Format("Monday 2 January 2006, 15:04 MST"), Platform: e.Tr.Name(),

@@ -107,6 +107,8 @@ var Catalog = []Setting{
 		Help: "Higher is looser and more surprising, lower is steadier. A persona file can override it."},
 	{Path: "language", Group: "brain", Kind: "text", Label: "Default language",
 		Help: "'auto' means English until someone writes in another language, then she follows them. Set a language name to change the default."},
+	{Path: "behavior.proactive", Group: "talk", Kind: "toggle", Label: "Let her start conversations",
+		Help: "She may write first in a private chat, to say something the night shift left on her mind. Only to people who have already DMed her, never between 23:00 and 09:00 (or their own quiet hours), at most one a day, less often if they ignore her, never after they tell her to stop. Needs the night shift on."},
 	{Path: "behavior.retry_transient", Group: "brain", Kind: "toggle", Label: "Retry once on hiccups",
 		Help: "If the provider times out on a direct call, she quietly tries once more before apologizing."},
 
