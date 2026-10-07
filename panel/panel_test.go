@@ -9,12 +9,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/snowarch/mak1zu/config"
 	"github.com/snowarch/mak1zu/home"
 	"github.com/snowarch/mak1zu/internal/telemetry"
 	"github.com/snowarch/mak1zu/persona"
 	"github.com/snowarch/mak1zu/provider"
+	"github.com/snowarch/mak1zu/sdk"
+	"github.com/snowarch/mak1zu/transport/local"
 )
 
 func newServer(t *testing.T) (*Server, string) {
@@ -190,5 +193,41 @@ func TestDirectivesAPIRoundTripAndTraversal(t *testing.T) {
 	}
 	if w := do(s, "DELETE", "/api/home/file?kind=rules&name=tone", "", csrf); w.Code != 200 {
 		t.Fatal(w.Code)
+	}
+}
+
+func TestLocalChatEndpoints(t *testing.T) {
+	s, _ := newServer(t)
+	lt := local.New("Maki", nil)
+	got := make(chan sdk.Message, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go lt.Run(ctx, func(_ context.Context, m sdk.Message) { got <- m })
+	s.Chat = lt
+	for i := 0; i < 100 && lt.Say(ctx, "") != nil; i++ {
+		time.Sleep(5 * time.Millisecond)
+	}
+	<-got
+
+	if w := do(s, "POST", "/api/chat/say", `{"text":"hello"}`, nil); w.Code != 403 {
+		t.Fatalf("chat must need the CSRF header, got %d", w.Code)
+	}
+	if w := do(s, "POST", "/api/chat/say", `{"text":"   "}`, csrf); w.Code != 400 {
+		t.Fatalf("empty message: %d", w.Code)
+	}
+	if w := do(s, "POST", "/api/chat/say", `{"text":"hello"}`, csrf); w.Code != 202 {
+		t.Fatalf("say: %d %s", w.Code, w.Body)
+	}
+	if m := <-got; m.Content != "hello" || m.Transport != "local" {
+		t.Fatalf("%+v", m)
+	}
+
+	lt.Send(ctx, local.Channel, sdk.Reply{Text: "ok", Files: []sdk.File{{Name: "a.html", Data: []byte("<script>alert(1)</script>")}}})
+	w := do(s, "GET", "/api/chat/file/a.html", "", nil)
+	if w.Code != 200 || w.Header().Get("Content-Type") != "application/octet-stream" || !strings.Contains(w.Header().Get("Content-Disposition"), "attachment") {
+		t.Fatalf("her files must download, never render as part of the panel: %d %v", w.Code, w.Header())
+	}
+	if w := do(s, "GET", "/api/chat/file/nope.html", "", nil); w.Code != 404 {
+		t.Fatal("unknown file")
 	}
 }

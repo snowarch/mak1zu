@@ -24,6 +24,7 @@ import (
 	"github.com/snowarch/mak1zu/internal/events"
 	"github.com/snowarch/mak1zu/internal/telemetry"
 	"github.com/snowarch/mak1zu/memory"
+	"github.com/snowarch/mak1zu/transport/local"
 	"github.com/snowarch/mak1zu/persona"
 	"github.com/snowarch/mak1zu/provider"
 )
@@ -45,6 +46,9 @@ type Server struct {
 	Mood      func() string
 	MoodState func() persona.MoodState
 	Preview   func(ctx context.Context, speaker string, convo []engine.PreviewTurn) (engine.PreviewResult, error)
+	// Chat is the local conversation: the web chat and the terminal UI talk to
+	// her through it, as the person at this machine.
+	Chat *local.Transport
 	// Avatar returns the pre-rendered expression PNG at a size, when artwork is wired in.
 	Avatar  func(name string, size int) ([]byte, bool)
 	Version string
@@ -75,6 +79,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/events", s.eventsStream)
 	mux.HandleFunc("GET /api/events/recent", s.eventsRecent)
 	mux.HandleFunc("POST /api/preview", s.preview)
+	mux.HandleFunc("POST /api/chat/say", s.chatSay)
+	mux.HandleFunc("GET /api/chat/stream", s.chatStream)
+	mux.HandleFunc("GET /api/chat/history", s.chatHistory)
+	mux.HandleFunc("GET /api/chat/file/{name}", s.chatFile)
 	mux.HandleFunc("GET /api/home/list", s.homeList)
 	mux.HandleFunc("GET /api/home/file", s.homeGet)
 	mux.HandleFunc("PUT /api/home/file", s.homePut)

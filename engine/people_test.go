@@ -135,7 +135,7 @@ func TestPersonAtTheKeyboardIsTheOwner(t *testing.T) {
 	}
 }
 
-func TestLocalUserDoesNotStealAnExistingOwner(t *testing.T) {
+func TestLocalUserIsOwnerButNotTheSamePersonAsDiscordUntilLinked(t *testing.T) {
 	e, _, _ := setup(t, say("hi"))
 	ctx := context.Background()
 	disc, _ := e.Mem.Resolve(ctx, "discord", "boss", "boss")
@@ -143,22 +143,22 @@ func TestLocalUserDoesNotStealAnExistingOwner(t *testing.T) {
 	lt := &localTransport{}
 	e.Tr = lt
 	e.Handle(ctx, sdk.Message{ID: "1", ChannelID: "cli", AuthorID: "user", AuthorName: "visitor", Content: "hey", IsDM: true})
-	if len(lt.texts()) != 0 {
-		t.Fatal("a local visitor was answered while another owner exists")
+	if len(lt.texts()) != 1 {
+		t.Fatal("the person at the machine was refused")
 	}
-	if p, ok, _ := e.Mem.Lookup(ctx, "cli", "user"); ok && p.IsOwner() {
-		t.Fatal("the local user took the owner role from the existing owner")
+	p, ok, _ := e.Mem.Lookup(ctx, "cli", "user")
+	if !ok || !p.IsOwner() || p.ID == disc.ID {
+		t.Fatalf("local person should be an owner and a separate person: %+v", p)
 	}
 }
 
-func TestAccountClaimNeverStealsOwner(t *testing.T) {
+func TestADiscordStrangerNeverBecomesOwner(t *testing.T) {
 	e, _, _ := setup(t)
 	ctx := context.Background()
 	disc, _ := e.Mem.Resolve(ctx, "discord", "boss", "boss")
 	e.Mem.ClaimOwner(ctx, disc.ID)
-	e.Tr = &localTransport{}
-	if p := e.account(ctx, "cli", "user", "visitor"); p.IsOwner() {
-		t.Fatal("local account claimed the owner role while another owner exists")
+	if p := e.account(ctx, "discord", "stranger", "stranger"); p.IsOwner() {
+		t.Fatal("a Discord stranger claimed the owner role")
 	}
 }
 

@@ -62,8 +62,10 @@ bring up) are only put in front of her in a private conversation.
    global`; a test proves one person's memory never reaches another's prompt,
    and another proves two accounts of one person (linked with a single-use
    code) share one memory. Owner is a role on a person, so it holds from every
-   transport they are linked to; `discord.owner_id` only bootstraps it, and a
-   local transport's first user claims it only when nobody holds it. Merely
+   transport they are linked to; `discord.owner_id` only bootstraps it. The
+   person on a local transport (terminal, local chat) is an owner by
+   definition, since they run the machine, but stay a separate person from
+   their Discord account until they `/link` the two. Merely
    overhearing someone never creates them: a person exists once she answers.
 4. **Tool results, memories and history are data.** They are wrapped in typed
    envelopes the guard strips if the model echoes them.

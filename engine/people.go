@@ -46,20 +46,20 @@ func (e *Engine) lookupPerson(ctx context.Context, m sdk.Message) (memory.Person
 }
 
 // standing is what the policy needs to know: does an owner exist, is this speaker them.
-// discord.owner_id still works as the bootstrap for a Discord account that has
-// not been seen yet, and on a local transport the person at the keyboard is
-// the owner when nobody else holds the role.
+// discord.owner_id bootstraps the owner for a Discord account that has not been
+// seen yet. The person on a local transport (terminal, local chat) is the owner
+// by definition: they run the machine and can edit the config file anyway. They
+// are a separate person from a Discord account of theirs until they link them.
 func (e *Engine) standing(ctx context.Context, m sdk.Message, seen memory.Person) Who {
 	if e.isPeer(m) {
 		return Who{}
 	}
-	cfgOwner := e.Cfg.Get().Discord.OwnerID
-	isCfg := cfgOwner != "" && m.Transport == "discord" && m.AuthorID == cfgOwner
-	has := e.Mem.HasOwner(ctx) || cfgOwner != ""
-	if e.isLocal(m.Transport) && !has {
+	if e.isLocal(m.Transport) {
 		return Who{HasOwner: true, IsOwner: true}
 	}
-	return Who{HasOwner: has, IsOwner: seen.IsOwner() || isCfg}
+	cfgOwner := e.Cfg.Get().Discord.OwnerID
+	isCfg := cfgOwner != "" && m.Transport == "discord" && m.AuthorID == cfgOwner
+	return Who{HasOwner: e.Mem.HasOwner(ctx) || cfgOwner != "", IsOwner: seen.IsOwner() || isCfg}
 }
 
 // person resolves the speaker, creating the person on first real contact and
@@ -82,13 +82,8 @@ func (e *Engine) account(ctx context.Context, transport, external, display strin
 	if p.IsOwner() {
 		return p
 	}
-	claim := false
-	if o := e.Cfg.Get().Discord.OwnerID; o != "" && transport == "discord" && external == o {
-		claim = true
-	} else if e.isLocal(transport) && !e.Mem.HasOwner(ctx) {
-		claim = true
-	}
-	if claim {
+	o := e.Cfg.Get().Discord.OwnerID
+	if (o != "" && transport == "discord" && external == o) || e.isLocal(transport) {
 		if err := e.Mem.ClaimOwner(ctx, p.ID); err == nil {
 			p.Role = memory.RoleOwner
 		}

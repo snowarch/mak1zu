@@ -390,8 +390,10 @@ func cmdRun(st *config.Store) error {
 		slog.Info("mcp server", "name", name, "tools", len(ts))
 	}
 
+	lt := newLocal(st, mem)
+	e.Add(lt)
 	if cfg.WebUI.Enabled {
-		ps := &panel.Server{Cfg: st, Lib: func() persona.Library { return persona.Library{Dir: st.Abs(st.Get().Persona.Dir)} },
+		ps := &panel.Server{Chat: lt, Cfg: st, Lib: func() persona.Library { return persona.Library{Dir: st.Abs(st.Get().Persona.Dir)} },
 			Home: e.Home, Ev: e.Ev, Mood: e.Mood, MoodState: e.MoodState, Preview: e.Preview, Version: version, Started: time.Now(),
 			Mem: mem, Tel: e.Tel, Router: router, Tools: func() []string {
 				var n []string
