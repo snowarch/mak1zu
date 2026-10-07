@@ -55,7 +55,9 @@ Usage:
   mak1zu chat                  plain line-by-line chat, for scripts and persona work
   mak1zu doctor [--offline]    check config, persona, memory and make a real call to each provider
   mak1zu persona list|check    list personas / validate the active one
-  mak1zu eval <inputs.txt>     score the active persona's voice on a list of inputs
+  mak1zu eval [--gate] [inputs.txt]
+                               say things to her and score how she sounds against the targets in her voice.json;
+                               --gate exits 1 when she is outside them (inputs: the file, her eval.txt, or a built-in spread)
   mak1zu night [--dry-run]     run the night shift now: she goes over the last days, writes her diary, tidies
                                what she knows and picks what to bring up (--dry-run stores nothing)
   mak1zu link [CODE]           make the terminal the same person as your Discord account: run /link there
@@ -111,11 +113,7 @@ func main() {
 		case "night":
 			err = cmdNight(st, args[1:])
 		case "eval":
-			if len(args) < 2 {
-				err = errors.New("usage: mak1zu eval <inputs.txt>  (one message per line)")
-			} else {
-				err = cmdEval(st, args[1])
-			}
+			err = cmdEval(st, args[1:])
 		}
 	default:
 		flag.Usage()
@@ -627,8 +625,9 @@ func cmdDoctor(st *config.Store, offline bool) error {
 func cmdPersona(st *config.Store, args []string) error {
 	cfg := st.Get()
 	lib := persona.Library{Dir: st.Abs(cfg.Persona.Dir)}
+	usage := errors.New("usage: mak1zu persona list | check | use ID | distill EXPORT | pack ID [FILE] | install SOURCE")
 	if len(args) == 0 {
-		return errors.New("usage: mak1zu persona list|check")
+		return usage
 	}
 	switch args[0] {
 	case "list":
@@ -646,8 +645,25 @@ func cmdPersona(st *config.Store, args []string) error {
 		}
 		sys := persona.Compose(p, persona.Context{Speaker: "Test"})
 		fmt.Printf("%s: %d chars of system prompt (~%d tokens)\n", p.Name, len(sys), len(sys)/4)
+	case "use":
+		if len(args) != 2 {
+			return usage
+		}
+		if _, err := lib.Load(args[1]); err != nil {
+			return err
+		}
+		if err := st.Patch(map[string]any{"persona.active": args[1]}); err != nil {
+			return err
+		}
+		fmt.Printf("she speaks as %s from her next message (a running mak1zu picks it up by itself)\n", args[1])
+	case "distill":
+		return cmdDistill(st, lib, args[1:])
+	case "pack":
+		return cmdPack(st, lib, args[1:])
+	case "install":
+		return cmdInstall(st, lib, args[1:])
 	default:
-		return errors.New("usage: mak1zu persona list|check")
+		return usage
 	}
 	return nil
 }

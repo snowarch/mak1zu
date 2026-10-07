@@ -1,0 +1,5 @@
+{
+  "median_words": [5, 25],
+  "max_p90_words": 70,
+  "min_lower_pct": 80
+}
