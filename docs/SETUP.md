@@ -17,12 +17,12 @@ Or `go install github.com/snowarch/mak1zu/cmd/mak1zu@latest`.
 
 ```bash
 mkdir ~/mak1zu && cd ~/mak1zu
-mak1zu init                   # asks which provider, takes the key (hidden)
+mak1zu init                   # asks which provider (or your own URL), takes the key (hidden), checks it answers
 mak1zu doctor                 # one real call; if it fails it says what to fix
 mak1zu chat                   # talk to her in the terminal first
 ```
 
-`init` creates `.makizu/`: her config, personality, rules and skills, plus a `.env` for secrets. Which provider? Free ones, cheap ones and local ones are laid out in [PROVIDERS.md](PROVIDERS.md). For a script: `mak1zu init --provider openrouter-free`.
+`init` creates `.makizu/`: her config, personality, rules and skills, plus a `.env` for secrets. Which provider? Free ones, cheap ones and local ones are laid out in [PROVIDERS.md](PROVIDERS.md). For a script: `mak1zu init --provider openrouter-free`, or `mak1zu init --base-url https://host/v1 --model ID --key-env VAR` for any OpenAI-compatible endpoint.
 
 Test her here before Discord. If she sounds wrong in the terminal she will sound wrong everywhere, and fixing it is a Markdown edit in `.makizu/personas/maki/persona.md`.
 

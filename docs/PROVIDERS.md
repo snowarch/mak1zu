@@ -7,9 +7,13 @@ Checked on 2026-10-07. Model lists, free tiers and prices move weekly; `mak1zu d
 ## Pick one
 
 ```bash
-mak1zu providers                  # every preset: cost, default model, where the key lives
-mak1zu init --provider <id>       # or run `mak1zu init` and pick from the menu
+mak1zu providers                  # every preset, plus any model server running on this machine
+mak1zu init                       # the menu: presets, servers it finds running here, or your own URL
+mak1zu init --provider <id>       # skip the menu
+mak1zu init --base-url <url>      # any OpenAI-compatible endpoint, see "Your own endpoint" below
 ```
+
+However you get there, `init` ends with one real call to the model and tells you what it answered, or what to fix. `mak1zu doctor` repeats that check any time.
 
 | Preset | Cost | Key from | Notes |
 | --- | --- | --- | --- |
@@ -92,13 +96,41 @@ ollama pull llama3.2                 # any model you like
 mak1zu init --provider ollama
 ```
 
-LM Studio: load a model, start its local server (default port 1234), then `mak1zu init --provider lmstudio` and set `model` to the id LM Studio shows. llama.cpp's `llama-server` and vLLM also speak this API: use any preset and change `base_url` and `model`.
+LM Studio: load a model, start its local server (default port 1234), then `mak1zu init --provider lmstudio` and set `model` to the id LM Studio shows. llama.cpp's `llama-server` and vLLM also speak this API: `mak1zu init` finds them by itself when they are running, or see [Your own endpoint](#your-own-endpoint).
 
 The first message can take a while while the model loads. If `doctor` reports a timeout, raise `timeout_seconds`.
 
-## Anything else
+## Your own endpoint
 
-Any OpenAI-compatible gateway works. In `.makizu/config.json`:
+Anything that speaks the OpenAI API works: your own vLLM or llama.cpp, a LiteLLM proxy, Together, Fireworks, Cerebras, xAI, NVIDIA, a gateway at work. A provider is an address, a model id and (usually) a key.
+
+**In `mak1zu init`**: pick the last entry, "Your own URL" (or paste the URL at the first prompt). It then
+
+1. takes the address as you have it: `api.together.xyz/v1`, `localhost:8000`, `https://host/v1/chat/completions` all work. It adds `https://` (or `http://` for this machine and private networks), strips a pasted route, and if the bare host 404s it tries `/v1` and says so;
+2. asks for the key (hidden), or uses `OPENAI_API_KEY` if you came in with the standard `OPENAI_BASE_URL` set; if the server answers 401 it asks again;
+3. asks the server what it serves (`GET /models`). One model: it takes it. Several: pick a number or type an id. No list (some servers have none): type the id;
+4. asks whether the model can read images;
+5. makes a real call. If it fails you get the cause and a one-key repair loop (`m` model, `k` key, `u` address) instead of a restart.
+
+The key goes in `.makizu/.env` under a name made from the host (`api.together.xyz` becomes `TOGETHER_API_KEY`), never in `config.json`. A server on this machine or a private address gets no key variable and a 120 s timeout, since a model can take a while to load.
+
+**Servers already running here** show up in the `init` menu with their model count: Ollama (11434), LM Studio (1234), llama.cpp or LocalAI (8080), vLLM (8000), Jan (1337), KoboldCpp (5001), text-generation-webui (5000), LiteLLM (4000). A port only counts if `/v1/models` answers with a real model list. `mak1zu providers` prints the same list.
+
+**From a script** (no terminal, no questions):
+
+```bash
+mak1zu init --base-url http://localhost:8000/v1                 # exactly one model served: picked for you
+mak1zu init --base-url https://api.together.xyz/v1 --model MODEL --key-env TOGETHER_API_KEY
+mak1zu init --base-url https://gw.example/v1 --model MODEL --key "$TOKEN" --protocol responses --vision \
+            --header "X-Team: red"
+mak1zu init --provider ollama --model qwen3                     # a preset with its model changed
+```
+
+`--key-env` means the key is already in that variable, so nothing is written to disk. `--no-check` skips the final call. If the address serves several models and you gave no `--model`, it prints the first ids and stops.
+
+**In the panel**: Models, "Your own endpoint". Paste the address, press Look, pick a model from the box, Add it. The key you type there is stored write-only in `config.json`. Servers running on this machine appear as tiles. Every provider card has a "Find models" button.
+
+**By hand**, in `.makizu/config.json`:
 
 ```json
 "llm": {
@@ -109,14 +141,17 @@ Any OpenAI-compatible gateway works. In `.makizu/config.json`:
       "model": "the-model-id",
       "protocol": "chat",
       "api_key_env": "MY_GATEWAY_KEY",
-      "vision": false
+      "vision": false,
+      "headers": { "X-Team": "red" }
     }
   },
   "routing": { "text": ["main"], "vision": ["main"] }
 }
 ```
 
-Or add it in the panel: **Models → Add a provider**, pick any preset, change the URL and the model. Reasoning models spend completion tokens thinking; if `doctor` says the model "answered with nothing visible", set `reasoning_headroom` to 1000 or more.
+Reasoning models spend completion tokens thinking; if `doctor` says the model "answered with nothing visible", set `reasoning_headroom` to 1000 or more.
+
+What it does not speak: APIs with their own shape (Anthropic's native Messages API, Gemini's native API, Bedrock, Vertex). Anthropic and Gemini have OpenAI-compatible endpoints, which the presets use. For the others, put a LiteLLM or OpenRouter in front. Azure OpenAI's `/openai/v1` endpoint is OpenAI-shaped, but I have not tried it.
 
 ## Fallbacks
 
@@ -139,6 +174,8 @@ Or add it in the panel: **Models → Add a provider**, pick any preset, change t
 | `has been retired` | the provider removed the model | pick from the list `doctor` prints |
 | `blocked the request (bot protection)` | a VPN or datacenter IP | try another network |
 | `nothing answered at localhost:11434` | the local server is not running | `ollama serve` |
+| `wants a key and none is set` | the server answered 401 and the provider has no key | set `api_key_env` and put the key in `.makizu/.env` |
+| `nothing at <url>/chat/completions (404)` | the address has no path | it ends in `/v1` almost everywhere: use the one `doctor` suggests |
 
 OpenAI's newer models refuse `max_tokens` and any `temperature` except their default. Mak1zu reads that refusal, switches the parameter and remembers it, so the `openai` preset works without you touching a setting.
 

@@ -51,6 +51,8 @@ type Server struct {
 	Started time.Time
 	// Test seam: build a client for the provider test button.
 	NewClient func(name string, p config.Provider) provider.Client
+	// Resolve looks at an address someone typed; tests replace it so they never touch the network.
+	Resolve func(ctx context.Context, raw, key string) provider.Resolved
 }
 
 func (s *Server) Handler() http.Handler {
@@ -68,6 +70,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/schema", s.schema)
 	mux.HandleFunc("GET /api/presets", s.presets)
 	mux.HandleFunc("POST /api/provider/add", s.addProvider)
+	mux.HandleFunc("POST /api/provider/discover", s.discover)
+	mux.HandleFunc("GET /api/local", s.local)
 	mux.HandleFunc("GET /api/events", s.eventsStream)
 	mux.HandleFunc("GET /api/events/recent", s.eventsRecent)
 	mux.HandleFunc("POST /api/preview", s.preview)

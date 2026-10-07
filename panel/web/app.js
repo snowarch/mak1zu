@@ -279,9 +279,20 @@ function routeEditor(which,label){
   };
   paint();return wrap;
 }
+function modelChips(base,models,label){
+  return h('div',{},h('div',{class:'mut',style:'margin-top:6px'},label),h('div',{class:'models'},models.map(m=>h('button',{class:'chip',onclick:async()=>{try{await applyEdit(base+'.model',m);toast('Model set to '+m);go('models')}catch(e){toast(e.message,1)}}},m))));
+}
 function providerCard(n){
   const p=S.config.llm.providers[n],base='llm.providers.'+n;
   const out=h('div');
+  const find=async()=>{
+    out.replaceChildren(h('div',{class:'diag'},'Asking '+p.base_url+' what it serves…'));
+    try{
+      const r=await api('POST','/api/provider/discover',{name:n});
+      if(r.models.length)out.replaceChildren(h('div',{class:'diag ok'},'It serves '+r.models.length+' model'+(r.models.length===1?'':'s')+'.',modelChips(base,r.models.slice(0,60),'Click one to use it:')));
+      else out.replaceChildren(h('div',{class:'diag bad'},h('b',{},'Could not read its model list'),h('div',{class:'fix'},(r.error||'it answered with an empty list')+'. Not every server has this route: type the model id in Settings.')));
+    }catch(e){out.replaceChildren(h('div',{class:'diag bad'},e.message))}
+  };
   const test=async()=>{
     out.replaceChildren(h('div',{class:'diag'},'Calling '+p.model+'…'));
     try{
@@ -298,6 +309,7 @@ function providerCard(n){
       p.api_key_env||p.api_key?h('span',{class:'pill '+(keyed?'ok':'bad')},keyed?'key found':'no key'):h('span',{class:'pill'},'no key needed'),
       S.cooldowns[n]?h('span',{class:'pill bad'},'cooling '+Math.ceil(S.cooldowns[n])+'s'):''),
     h('div',{class:'actions',style:'margin-top:4px'},h('button',{class:'btn pri',onclick:test},'Test with a real call'),
+      h('button',{class:'btn',onclick:find},'Find models'),
       h('button',{class:'btn danger',onclick:async()=>{if(!confirm('Remove provider '+n+'?'))return;try{await api('POST','/api/config/patch',{edits:{[base]:null}});await refreshState();go('models')}catch(e){toast(e.message,1)}}},'Remove')),
     out,
     h('details',{class:'fold'},h('summary',{},'Settings'),
@@ -313,6 +325,48 @@ function providerCard(n){
       S_('failure_cooldown_seconds','Cooldown after failure','How long to skip this provider after it fails.','seconds',{min:0,max:3600,unit:'s'}),
       S_('vision','Can see images','Turn on only if the model accepts images.','toggle')));
 }
+function customEndpointCard(){
+  const addr=h('input',{type:'text',placeholder:'https://api.together.xyz/v1  or  http://localhost:8000/v1',autocomplete:'off',spellcheck:'false'});
+  const key=h('input',{type:'password',placeholder:'empty if it needs none (stored write-only)',autocomplete:'off'});
+  const model=h('input',{type:'text',placeholder:'model id',list:'dl-models',autocomplete:'off',spellcheck:'false'});
+  const dl=h('datalist',{id:'dl-models'});
+  const vision=h('input',{type:'checkbox'});
+  const out=h('div'),here=h('div');
+  const look=async()=>{
+    if(!addr.value.trim()){toast('Type the address first.',1);return}
+    out.replaceChildren(h('div',{class:'diag'},'Looking…'));
+    try{
+      const r=await api('POST','/api/provider/discover',{base_url:addr.value,key:key.value});
+      addr.value=r.base_url;
+      dl.replaceChildren(...r.models.map(m=>h('option',{value:m})));
+      if(r.models.length===1&&!model.value)model.value=r.models[0];
+      if(r.models.length)out.replaceChildren(h('div',{class:'diag ok'},(r.note?r.note+'. ':'')+'It serves '+r.models.length+' model'+(r.models.length===1?'':'s')+(r.models.length>1?': click the model box and pick one, or type an id.':'.')));
+      else out.replaceChildren(h('div',{class:'diag bad'},h('b',{},r.status===401||r.status===403?'It wants a key.':'Could not read its model list'),h('div',{class:'fix'},r.status===401||r.status===403?'Paste the key above and press Look again.':'Fine if the server is not running yet, or it has no model list: type the model id yourself.')));
+    }catch(e){out.replaceChildren(h('div',{class:'diag bad'},e.message))}
+  };
+  const add=async()=>{
+    try{
+      const r=await api('POST','/api/provider/add',{preset:'custom',base_url:addr.value,model:model.value,key:key.value,vision:vision.checked});
+      await refreshState();toast('Added '+r.name+'. Press Test with a real call.');go('models');
+    }catch(e){toast(e.message,1)}
+  };
+  api('GET','/api/local').then(list=>{
+    if(!list.length)return;
+    here.replaceChildren(h('div',{class:'lbl',style:'margin-top:10px'},'Running on this machine right now'),
+      h('div',{class:'tiles'},list.map(l=>h('button',{class:'tile',onclick:()=>{addr.value=l.BaseURL;key.value='';dl.replaceChildren(...l.Models.map(m=>h('option',{value:m})));model.value=l.Models.length===1?l.Models[0]:'';look();model.focus()}},
+        h('b',{},l.Name),h('span',{class:'mono'},l.BaseURL.replace('http://','').replace('/v1','')),h('span',{style:'font-size:12px'},l.Models.length+' model'+(l.Models.length===1?'':'s'))))));
+  }).catch(()=>{});
+  return h('div',{class:'card'},h('h3',{},'Your own endpoint'),
+    h('p',{class:'lead'},'Any server that speaks the OpenAI API: vLLM, llama.cpp, LiteLLM, Together, Fireworks, a company gateway. Paste the address (with or without /v1, or the whole /chat/completions URL), press Look, pick a model.'),
+    h('div',{class:'lbl'},'Address'),addr,
+    h('div',{class:'lbl',style:'margin-top:8px'},'Key'),key,
+    h('div',{class:'actions',style:'margin-top:8px'},h('button',{class:'btn',onclick:look},'Look: what does it serve?')),
+    out,
+    h('div',{class:'lbl',style:'margin-top:8px'},'Model'),model,dl,
+    h('label',{class:'mut',style:'display:flex;gap:6px;align-items:center;margin-top:8px'},vision,'It can read images'),
+    h('div',{class:'actions',style:'margin-top:8px'},h('button',{class:'btn pri',onclick:add},'Add it')),
+    here);
+}
 views.models=()=>{
   const tiles=PRESETS.map(p=>h('button',{class:'tile',onclick:async()=>{
     let name=p.ID,i=2;while(S.config.llm.providers[name])name=p.ID+'-'+i++;
@@ -323,7 +377,8 @@ views.models=()=>{
   return [h('p',{class:'lead'},'Providers are the services that actually think. Add one, give it a key, press Test. If something is wrong the test says what, in words.'),
     ...Object.keys(S.config.llm.providers).map(providerCard),
     h('div',{class:'card'},h('h3',{},'Order of preference'),routeEditor('text','Chat'),routeEditor('vision','Images')),
-    h('div',{class:'card'},h('h3',{},'Add a provider'),h('p',{class:'lead'},'Anything that speaks the OpenAI API also works: add any preset, then change its base URL and model.'),h('div',{class:'tiles'},tiles))];
+    customEndpointCard(),
+    h('div',{class:'card'},h('h3',{},'Add a ready-made provider'),h('p',{class:'lead'},'Presets with a sane model already picked. Add one, put its key in .makizu/.env, press Test.'),h('div',{class:'tiles'},tiles))];
 };
 
 views.rooms=()=>{

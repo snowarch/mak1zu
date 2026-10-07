@@ -1,6 +1,7 @@
 package panel
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -154,20 +155,59 @@ func (s *Server) presets(w http.ResponseWriter, r *http.Request) {
 var providerName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)
 
 func (s *Server) addProvider(w http.ResponseWriter, r *http.Request) {
-	var body struct{ Preset, Name string }
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<12)).Decode(&body); err != nil {
+	var body struct {
+		Preset, Name, Model, Protocol string
+		BaseURL                       string `json:"base_url"`
+		Key                           string
+		KeyEnv                        string `json:"key_env"`
+		Vision                        bool
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&body); err != nil {
 		fail(w, 400, err)
 		return
 	}
-	pr, ok := provider.PresetByID(body.Preset)
-	if !ok {
-		fail(w, 404, errors.New("unknown preset"))
-		return
+	var cfg config.Provider
+	label := ""
+	if strings.EqualFold(body.Preset, "custom") {
+		// same normalizing as Look, so Add without pressing Look still finds /v1
+		rctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+		base := s.resolve(rctx, body.BaseURL, body.Key).BaseURL
+		cancel()
+		model := strings.TrimSpace(body.Model)
+		if base == "" || model == "" {
+			fail(w, 422, errors.New("an endpoint needs an address and a model id"))
+			return
+		}
+		keyEnv := strings.TrimSpace(body.KeyEnv)
+		if keyEnv == "" && body.Key == "" && !provider.IsLocalHost(provider.HostOf(base)) {
+			keyEnv = provider.KeyEnvFor(base)
+		}
+		if keyEnv != "" && !envName.MatchString(keyEnv) {
+			fail(w, 422, errors.New("key variable: letters, digits and _, like TOGETHER_API_KEY"))
+			return
+		}
+		cfg = provider.Custom(base, keyEnv, body.Vision)
+		cfg.Model = model
+		if body.Protocol == "responses" {
+			cfg.Protocol = "responses"
+		}
+		cfg.APIKey = body.Key // write-only: the panel never sends it back
+		label = "a custom endpoint"
+		if body.Name == "" {
+			body.Name = hostName(base)
+		}
+	} else {
+		pr, ok := provider.PresetByID(body.Preset)
+		if !ok {
+			fail(w, 404, errors.New("unknown preset"))
+			return
+		}
+		cfg, label = pr.Provider(), "the "+pr.Label+" preset"
+		if body.Name == "" {
+			body.Name = pr.ID
+		}
 	}
 	name := strings.ToLower(strings.TrimSpace(body.Name))
-	if name == "" {
-		name = pr.ID
-	}
 	if !providerName.MatchString(name) {
 		fail(w, 422, errors.New("name: lowercase letters, digits, - and _"))
 		return
@@ -176,15 +216,82 @@ func (s *Server) addProvider(w http.ResponseWriter, r *http.Request) {
 		fail(w, 409, fmt.Errorf("%q already exists", name))
 		return
 	}
-	pj, _ := json.Marshal(pr.Provider())
+	pj, _ := json.Marshal(cfg)
 	var v map[string]any
 	_ = json.Unmarshal(pj, &v)
 	if err := s.Cfg.Patch(map[string]any{"llm.providers." + name: v}); err != nil {
 		fail(w, 422, err)
 		return
 	}
-	s.note("added provider " + name + " from the " + pr.Label + " preset")
+	s.note("added provider " + name + " from " + label)
 	writeJSON(w, 200, map[string]any{"ok": true, "name": name})
+}
+
+func (s *Server) resolve(ctx context.Context, raw, key string) provider.Resolved {
+	if s.Resolve != nil {
+		return s.Resolve(ctx, raw, key)
+	}
+	return provider.ResolveEndpoint(ctx, raw, key)
+}
+
+var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+
+// hostName makes a provider name out of an address: api.together.xyz -> together.
+func hostName(base string) string {
+	env := provider.KeyEnvFor(base)
+	if env == "MAK1ZU_API_KEY" {
+		return "local"
+	}
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSuffix(env, "_API_KEY"), "_", "-"))
+}
+
+// discover looks at an address someone typed: normalizes it, adds /v1 when
+// that is where the server lives, and lists what it serves. A provider name
+// with no key given reuses that provider's own key, so a card can list models.
+func (s *Server) discover(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		BaseURL string `json:"base_url"`
+		Key     string
+		Name    string
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&body); err != nil {
+		fail(w, 400, err)
+		return
+	}
+	key := body.Key
+	if p, ok := s.Cfg.Get().LLM.Providers[body.Name]; ok && key == "" {
+		key = p.Key()
+		if body.BaseURL == "" {
+			body.BaseURL = p.BaseURL
+		}
+	}
+	if strings.TrimSpace(body.BaseURL) == "" {
+		fail(w, 422, errors.New("an address is needed"))
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+	res := s.resolve(ctx, body.BaseURL, key)
+	out := map[string]any{"base_url": res.BaseURL, "models": res.Models, "note": res.Note, "status": res.Status,
+		"local": provider.IsLocalHost(provider.HostOf(res.BaseURL)), "key_env": provider.KeyEnvFor(res.BaseURL)}
+	if res.Models == nil {
+		out["models"] = []string{}
+	}
+	if res.Err != nil {
+		out["error"] = res.Err.Error()
+	}
+	writeJSON(w, 200, out)
+}
+
+// local lists model servers running on this machine right now.
+func (s *Server) local(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	found := provider.DetectLocal(ctx)
+	if found == nil {
+		found = []provider.Local{}
+	}
+	writeJSON(w, 200, found)
 }
 
 // note puts a panel action in the feed so changes are visible as they land.

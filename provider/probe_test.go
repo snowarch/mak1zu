@@ -68,7 +68,7 @@ func TestProbeExplainsFailures(t *testing.T) {
 		{"session", 400, `{"error":{"type":"MissingSessionID","message":"missing x-opencode-session"}}`, "session header"},
 		{"free tier", 403, `{"type":"error","error":{"type":"FreeTierError","message":"OpenCode's free tier can only be used from within OpenCode"}}`, "free-tier"},
 		{"retired", 410, `{"error":{"message":"Model old-1 has been deprecated. Use new-1 instead."}}`, "retired"},
-		{"wrong path", 404, `<html>not found</html>`, "not found"},
+		{"no path at all", 404, `<html>not found</html>`, "nothing at"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -77,7 +77,9 @@ func TestProbeExplainsFailures(t *testing.T) {
 				w.Write([]byte(tc.body))
 			}))
 			defer srv.Close()
-			d := Probe(context.Background(), "p", probeCfg(srv.URL))
+			c := probeCfg(srv.URL)
+			c.APIKey = "sk-test"
+			d := Probe(context.Background(), "p", c)
 			if d.OK || !strings.Contains(d.Problem, tc.want) || d.Fix == "" {
 				t.Fatalf("%+v", d)
 			}
@@ -147,5 +149,26 @@ func TestPresetsAreComplete(t *testing.T) {
 		if c := p.Provider(); !c.Enabled || c.BaseURL != p.BaseURL {
 			t.Errorf("bad conversion %s", p.ID)
 		}
+	}
+}
+
+func TestProbeSaysWhenAServerWantsAKeyAndNoneIsSet(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(401) }))
+	defer srv.Close()
+	c := probeCfg(srv.URL)
+	c.APIKey, c.APIKeyEnv = "", ""
+	d := Probe(context.Background(), "p", c)
+	if d.OK || !strings.Contains(d.Problem, "wants a key and none is set") {
+		t.Fatalf("%+v", d)
+	}
+}
+
+func TestProbeWrongPathUnderV1StillSaysNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) }))
+	defer srv.Close()
+	c := probeCfg(srv.URL + "/v1")
+	d := Probe(context.Background(), "p", c)
+	if d.OK || !strings.Contains(d.Problem, "not found") {
+		t.Fatalf("%+v", d)
 	}
 }

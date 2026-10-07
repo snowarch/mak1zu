@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/snowarch/mak1zu/persona"
+	"github.com/snowarch/mak1zu/provider"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -358,5 +360,104 @@ func TestAllDownNeedsEveryRoutedProviderCooling(t *testing.T) {
 	cfg.LLM.Routing.Text = nil
 	if allDown(cfg, nil) {
 		t.Fatal("no providers is a setup problem, not sadness")
+	}
+}
+
+func fakeModelServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/models" {
+			w.Write([]byte(`{"data":[{"id":"alpha"},{"id":"beta"}]}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestDiscoverNormalizesAndListsModels(t *testing.T) {
+	s, _ := newServer(t)
+	srv := fakeModelServer(t)
+	w := do(s, "POST", "/api/provider/discover", `{"base_url":"`+srv.URL+`/v1/chat/completions"}`, csrf)
+	var got struct {
+		BaseURL string   `json:"base_url"`
+		Models  []string `json:"models"`
+		Local   bool     `json:"local"`
+		Error   string   `json:"error"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != 200 || got.BaseURL != srv.URL+"/v1" || len(got.Models) != 2 || !got.Local || got.Error != "" {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	w = do(s, "POST", "/api/provider/discover", `{"base_url":"`+srv.URL+`"}`, csrf)
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if got.BaseURL != srv.URL+"/v1" {
+		t.Fatalf("a bare host should find /v1: %s", w.Body)
+	}
+	if w := do(s, "POST", "/api/provider/discover", `{"base_url":"http://127.0.0.1:1/v1"}`, csrf); !strings.Contains(w.Body.String(), `"error"`) || w.Code != 200 {
+		t.Fatalf("nothing answering is a result, not a failure: %d %s", w.Code, w.Body)
+	}
+	if w := do(s, "POST", "/api/provider/discover", `{}`, csrf); w.Code != 422 {
+		t.Fatalf("%d", w.Code)
+	}
+}
+
+func TestAddCustomEndpoint(t *testing.T) {
+	s, _ := newServer(t)
+	s.Resolve = func(_ context.Context, raw, _ string) provider.Resolved {
+		return provider.Resolved{BaseURL: provider.NormalizeBaseURL(raw), Err: errors.New("offline")}
+	}
+	body := `{"preset":"custom","base_url":"api.together.xyz/v1/chat/completions","model":"m1","key":"sk-PANELSECRET","vision":true}`
+	w := do(s, "POST", "/api/provider/add", body, csrf)
+	if w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	p := s.Cfg.Get().LLM.Providers["together"]
+	if p.BaseURL != "https://api.together.xyz/v1" || p.Model != "m1" || !p.Vision || p.APIKey != "sk-PANELSECRET" || p.APIKeyEnv != "" || p.Protocol != "chat" {
+		t.Fatalf("%+v", p)
+	}
+	if strings.Contains(w.Body.String(), "PANELSECRET") {
+		t.Fatal("key echoed")
+	}
+	if w := do(s, "GET", "/api/state", "", nil); strings.Contains(w.Body.String(), "PANELSECRET") {
+		t.Fatal("state leaks the key")
+	}
+	w = do(s, "POST", "/api/provider/add", `{"preset":"custom","base_url":"http://localhost:8000/v1","model":"q"}`, csrf)
+	if w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if lp := s.Cfg.Get().LLM.Providers["local"]; lp.APIKeyEnv != "" || lp.TimeoutSeconds != 120 {
+		t.Fatalf("a local server needs no key: %+v", lp)
+	}
+	for body, code := range map[string]int{
+		`{"preset":"custom","model":"x"}`:                                               422,
+		`{"preset":"custom","base_url":"http://x/v1"}`:                                  422,
+		`{"preset":"custom","base_url":"http://x/v1","model":"m","key_env":"bad name"}`: 422,
+		`{"preset":"custom","base_url":"https://api.together.xyz/v1","model":"m"}`:      409,
+	} {
+		if w := do(s, "POST", "/api/provider/add", body, csrf); w.Code != code {
+			t.Errorf("%s -> %d, want %d", body, w.Code, code)
+		}
+	}
+}
+
+func TestAddCustomWithoutLookStillFindsV1(t *testing.T) {
+	s, _ := newServer(t)
+	srv := fakeModelServer(t)
+	body := `{"preset":"custom","name":"fresh","base_url":"` + srv.URL + `","model":"alpha"}`
+	if w := do(s, "POST", "/api/provider/add", body, csrf); w.Code != 200 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if got := s.Cfg.Get().LLM.Providers["fresh"].BaseURL; got != srv.URL+"/v1" {
+		t.Fatalf("base_url %q", got)
+	}
+}
+
+func TestLocalEndpointAnswersWithAList(t *testing.T) {
+	s, _ := newServer(t)
+	w := do(s, "GET", "/api/local", "", nil)
+	if w.Code != 200 || !strings.HasPrefix(strings.TrimSpace(w.Body.String()), "[") {
+		t.Fatalf("%d %s", w.Code, w.Body)
 	}
 }

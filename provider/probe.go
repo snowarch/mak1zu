@@ -3,8 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"net/http"
 	"net/url"
 	"sort"
 	"strings"
@@ -78,6 +76,8 @@ func explain(err error, c config.Provider) Diagnosis {
 		return Diagnosis{Problem: "model " + c.Model + " is a free-tier model that only works inside the app that hosts it, not through the API", Fix: "pick a model that is open to API clients (for opencode, the Go list or a paid Zen model) or another preset; docs/PROVIDERS.md says which is which"}
 	case pe.Status == 410 || strings.Contains(low, "deprecated") || strings.Contains(low, "retired"):
 		return Diagnosis{Problem: "model " + c.Model + " has been retired by " + host + " (" + pe.Msg + ")", Fix: "switch to a current model; the suggestions below come from the provider's own list"}
+	case pe.Kind == KindAuth && c.Key() == "":
+		return Diagnosis{Problem: host + " wants a key and none is set (" + itoa(pe.Status) + ")", Fix: "set api_key_env on this provider and put the key in .makizu/.env (the panel's Models tab has a write-only key box too)"}
 	case pe.Kind == KindAuth:
 		return Diagnosis{Problem: host + " rejected the key (" + itoa(pe.Status) + ")", Fix: "the key is wrong, expired, or has no access to model " + c.Model}
 	case pe.Kind == KindRateLimit:
@@ -86,12 +86,19 @@ func explain(err error, c config.Provider) Diagnosis {
 		return Diagnosis{Problem: host + " wants a session header", Fix: "add it under headers for this provider"}
 	case pe.Kind == KindEmpty:
 		return Diagnosis{Problem: "the model answered with nothing visible (it spent the budget thinking)", Fix: "raise reasoning_headroom, or lower reasoning_effort"}
+	case pe.Status == 404 && !strings.Contains(low, "model") && pathless(c.BaseURL):
+		return Diagnosis{Problem: "nothing at " + c.BaseURL + "/chat/completions (404)", Fix: "base_url has no path; almost every server wants it to end in /v1, so try " + strings.TrimRight(c.BaseURL, "/") + "/v1"}
 	case pe.Status == 404 || strings.Contains(low, "model"):
 		return Diagnosis{Problem: "model " + c.Model + " or the path was not found at " + host, Fix: "check the model name and that base_url ends where the provider says (usually /v1)"}
 	case pe.Kind == KindBadRequest:
 		return Diagnosis{Problem: "the provider refused the request: " + pe.Msg, Fix: "usually the wrong protocol (chat vs responses) or an unsupported parameter"}
 	}
 	return Diagnosis{Problem: pe.Msg, Fix: "see the log for details"}
+}
+
+func pathless(base string) bool {
+	u, err := url.Parse(base)
+	return err == nil && (u.Path == "" || u.Path == "/")
 }
 
 func itoa(n int) string {
@@ -102,28 +109,8 @@ func itoa(n int) string {
 // suggestModels asks the provider what it actually serves and returns the
 // closest ids to the one that failed.
 func suggestModels(ctx context.Context, h *HTTP, want string) []string {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(h.Cfg.BaseURL, "/")+"/models", nil)
+	ids, _, err := ListModels(ctx, h.Cfg)
 	if err != nil {
-		return nil
-	}
-	h.decorate(req)
-	resp, err := h.HC.Do(req)
-	if err != nil {
-		return nil
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil
-	}
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	var v struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if json.Unmarshal(data, &v) != nil {
 		return nil
 	}
 	w := strings.ToLower(want)
@@ -132,8 +119,8 @@ func suggestModels(ctx context.Context, h *HTTP, want string) []string {
 		n  int
 	}
 	var all []scored
-	for _, m := range v.Data {
-		all = append(all, scored{m.ID, sharedPrefix(strings.ToLower(m.ID), w)})
+	for _, id := range ids {
+		all = append(all, scored{id, sharedPrefix(strings.ToLower(id), w)})
 	}
 	sort.SliceStable(all, func(i, j int) bool { return all[i].n > all[j].n })
 	var out []string

@@ -13,7 +13,7 @@ The default character is **Maki**: flat and dry on the surface, shy underneath. 
 
 - **Servers and DMs, with house rules per room.** Home channels where she talks freely, mention-only channels where only a real `@mention` wakes her, owner-only DMs.
 - **Memory that stays with the person.** SQLite with full-text search: what you told her, how she relates to you, inside jokes, reminders, `forget me`. One person's memory never reaches another person's prompt; a test proves it.
-- **Any model.** OpenAI-compatible `chat` and `responses` protocols, ordered fallbacks, a circuit breaker, vision routing. Free tiers, paid hosts and local models all work: [docs/PROVIDERS.md](docs/PROVIDERS.md).
+- **Any model.** Thirteen presets, or paste the address of anything that speaks the OpenAI API (vLLM, llama.cpp, LiteLLM, Together, a company gateway). Ordered fallbacks, a circuit breaker, vision routing, and `init` makes a real call to prove it works before it finishes: [docs/PROVIDERS.md](docs/PROVIDERS.md).
 - **A web panel** on `127.0.0.1:8787`: live feed of what she heard and why she stayed quiet, models, rooms, dials, her personality file. Changes apply instantly; keys are write-only.
 - **A guard on every reply.** No leaked prompts, no tool protocol, no `*stares*` ten times in a row, no "I'd be happy to help". A reply that promises an attachment and has none is caught.
 - **Extensible.** Tools and hooks in about 20 lines of Go, any [MCP](https://modelcontextprotocol.io) server as a tool source, transports in five methods, personalities in Markdown. [docs/SDK.md](docs/SDK.md)
@@ -48,7 +48,7 @@ What she does not do: join voice channels, run commands or read files on the hos
 git clone https://github.com/snowarch/mak1zu && cd mak1zu
 make install         # builds and copies mak1zu to ~/.local/bin
 mkdir ~/mak1zu && cd ~/mak1zu
-mak1zu init          # pick a provider, paste the key (hidden)
+mak1zu init          # pick a provider or paste your own URL, paste the key (hidden)
 mak1zu doctor        # one real call; if it fails, it says what to fix
 mak1zu chat          # try her in the terminal
 mak1zu run           # Discord + panel at http://127.0.0.1:8787
@@ -67,6 +67,13 @@ No card, no money:
 | `ollama`, `lmstudio` | your own machine | slower, and nothing ever leaves it |
 
 Cheap and good: `opencode-go` (a subscription to open-weight models; works from any client), `deepseek`, `gemini`, `groq`. Also `openai`, `anthropic`, `mistral`, `openrouter`, `opencode-zen`.
+
+**Your own server or gateway.** The last entry of the `init` menu is "Your own URL": paste any OpenAI-compatible address (with or without `/v1`, or the whole `/chat/completions` URL), and it lists the models it serves and lets you pick one. Servers already running on your machine (Ollama, LM Studio, llama.cpp, vLLM, Jan, KoboldCpp, LiteLLM on their usual ports) show up in the menu by themselves. From a script:
+
+```bash
+mak1zu init --base-url https://api.together.xyz/v1 --model meta-llama/Llama-3.3-70B-Instruct-Turbo --key-env TOGETHER_API_KEY
+mak1zu init --base-url http://localhost:8000/v1      # one model served: it picks it
+```
 
 One thing worth knowing before you go looking: opencode Zen's *free* models only work inside the OpenCode app and answer `403` from anywhere else, even with a key. Go and paid Zen models work. The details, the commands to list each provider's models, and what each error means are in [docs/PROVIDERS.md](docs/PROVIDERS.md). `mak1zu providers` prints the same table in your terminal, and `mak1zu init --provider <id>` skips the menu.
 

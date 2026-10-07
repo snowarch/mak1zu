@@ -37,13 +37,18 @@ var version = "0.1.0-dev"
 const usage = `mak1zu %s: a companion you can shape.
 
 Usage:
-  mak1zu init [--provider ID] [dir]
-                               create dir/.makizu with config, personas, rules and skills (default .);
-                               on a terminal it asks which provider, or pass an id from "mak1zu providers"
+  mak1zu init [flags] [dir]    create dir/.makizu with config, personas, rules and skills (default .);
+                               on a terminal it asks which provider (a preset, a server it finds running
+                               here, or your own OpenAI-compatible URL) and checks that it answers.
+                               without a terminal, pick with flags:
+                                 --provider ID                a preset from "mak1zu providers"
+                                 --base-url URL [--model ID]  any OpenAI-compatible endpoint
+                                 --key KEY | --key-env VAR    the key, or the variable that holds it
+                                 --protocol, --header, --vision, --no-check (see: mak1zu init -h)
   mak1zu init --update [--dry-run] [--force] [dir]
                                bring an existing .makizu up to this version's personas, rules and skills
                                without overwriting what you changed (--dry-run looks first)
-  mak1zu providers             list provider presets: cost, default model, where to get a key
+  mak1zu providers             list presets (cost, model, where to get a key) and servers running here
   mak1zu run                   start the companion (Discord + web panel)
   mak1zu chat                  talk to her in the terminal
   mak1zu doctor [--offline]    check config, persona, memory and make a real call to each provider
@@ -165,16 +170,32 @@ func loadDotEnv(path string) {
 	}
 }
 
+// listFlag is a repeatable string flag.
+type listFlag []string
+
+func (l *listFlag) String() string     { return strings.Join(*l, ", ") }
+func (l *listFlag) Set(v string) error { *l = append(*l, v); return nil }
+
 func cmdInitArgs(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	preset := fs.String("provider", "", "provider preset id; run \"mak1zu providers\" for the list")
-	key := fs.String("key", "", "API key for the preset (prefer the hidden prompt: flags land in shell history)")
+	var o initOptions
+	var headers listFlag
+	fs.StringVar(&o.Provider, "provider", "", "provider preset id (\"mak1zu providers\" lists them), or custom")
+	fs.StringVar(&o.BaseURL, "base-url", "", "any OpenAI-compatible endpoint, the address before /chat/completions (http://localhost:8000/v1)")
+	fs.StringVar(&o.Model, "model", "", "model id (a preset has a default; a custom endpoint with one model picks it)")
+	fs.StringVar(&o.Key, "key", "", "API key (prefer the hidden prompt: flags land in shell history)")
+	fs.StringVar(&o.KeyEnv, "key-env", "", "environment variable that already holds the key, so none is written to disk")
+	fs.StringVar(&o.Protocol, "protocol", "", "chat (default) or responses")
+	fs.Var(&headers, "header", "extra request header, \"Name: value\" (repeatable)")
+	fs.BoolVar(&o.Vision, "vision", false, "the model accepts images")
+	fs.BoolVar(&o.NoCheck, "no-check", false, "do not make the live check call after writing the config")
 	update := fs.Bool("update", false, "update an existing .makizu to this version's defaults, keeping your edits")
 	dry := fs.Bool("dry-run", false, "with --update: show what would change and write nothing")
 	force := fs.Bool("force", false, "with --update: overwrite files you changed (the old copy is kept in .makizu/.backup)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	o.Headers = headers
 	dir := "."
 	if fs.NArg() > 0 {
 		dir = fs.Arg(0)
@@ -185,25 +206,31 @@ func cmdInitArgs(args []string) error {
 	if *dry || *force {
 		return errors.New("--dry-run and --force only make sense with --update")
 	}
-	var pr provider.Preset
+	// refuse before asking anything: nobody wants six questions and then a no
+	if _, err := os.Stat(filepath.Join(dir, ".makizu", "config.json")); err == nil {
+		return fmt.Errorf("%s already exists; refusing to overwrite (change it in the panel, or `mak1zu init --update` for new defaults)", filepath.Join(dir, ".makizu", "config.json"))
+	}
+	ctx := context.Background()
+	w := newWizard()
+	var ch choice
+	var err error
 	switch {
-	case *preset != "":
-		p, ok := provider.PresetByID(*preset)
-		if !ok {
-			return fmt.Errorf("unknown provider %q", *preset)
-		}
-		pr = p
-	case isTTY(os.Stdin):
-		p, k, err := chooseProvider()
-		if err != nil {
+	case o.any():
+		if ch, err = w.fromFlags(ctx, o); err != nil {
 			return err
 		}
-		pr, *key = p, k
+		if !o.NoCheck {
+			ch = w.checkOnce(ctx, ch)
+		}
+	case isTTY(os.Stdin):
+		if ch, err = w.choose(ctx); err != nil {
+			return err
+		}
 	}
-	return cmdInit(dir, pr, *key)
+	return cmdInit(dir, ch)
 }
 
-func cmdInit(dir string, pr provider.Preset, key string) error {
+func cmdInit(dir string, ch choice) error {
 	root := filepath.Join(dir, ".makizu")
 	if err := os.MkdirAll(filepath.Join(root, "data"), 0o700); err != nil {
 		return err
@@ -214,9 +241,9 @@ func cmdInit(dir string, pr provider.Preset, key string) error {
 	}
 	cfg := config.Default()
 	keyEnv := "MAK1ZU_API_KEY"
-	if pr.ID != "" {
-		cfg.LLM.Providers["main"] = pr.Provider()
-		keyEnv = pr.KeyEnv
+	if ch.ID != "" {
+		cfg.LLM.Providers["main"] = ch.P
+		keyEnv = ch.P.APIKeyEnv
 	}
 	if err := config.New(cfgPath, cfg).Save(cfg); err != nil {
 		return err
@@ -238,31 +265,46 @@ func cmdInit(dir string, pr provider.Preset, key string) error {
 		}
 	}
 	env := "# Secrets. Never commit this file. Load with: set -a; . ./.makizu/.env; set +a\n"
-	if keyEnv != "" {
-		env += keyEnv + "=" + key + "\n"
+	if keyEnv != "" && (ch.Key != "" || os.Getenv(keyEnv) == "") {
+		env += keyEnv + "=" + ch.Key + "\n"
 	}
 	env += "MAK1ZU_DISCORD_TOKEN=\n"
 	if err := os.WriteFile(filepath.Join(root, ".env"), []byte(env), 0o600); err != nil {
 		return err
 	}
 	_ = os.WriteFile(filepath.Join(root, ".gitignore"), []byte("config.json\n.env\ndata/\n.updates/\n.backup/\n"), 0o644)
-	fmt.Printf("created %s (%d default files, %d kept)\n\nnext:\n", root, copied, kept)
+	fmt.Printf("created %s (%d default files, %d kept)\n", root, copied, kept)
+	if ch.ID != "" {
+		fmt.Printf("provider: %s, model %s\n", ch.P.BaseURL, ch.P.Model)
+	}
+	fmt.Printf("\nnext:\n")
 	step := 1
 	say := func(f string, a ...any) { fmt.Printf("  %d. "+f+"\n", append([]any{step}, a...)...); step++ }
 	switch {
-	case pr.ID == "":
-		say("put your API key in %s/.env and set the provider in the panel or config.json", root)
-	case pr.KeyEnv == "":
-		say("%s: %s", pr.Label, pr.Note)
-	case key != "":
-		say("key saved in %s/.env as %s", root, pr.KeyEnv)
+	case ch.ID == "":
+		say("pick the provider: edit %s/config.json, or run `mak1zu run` and use Models in the panel (a preset, or your own URL), then put the key in %s/.env", root, root)
+	case keyEnv == "":
+		if ch.Note != "" {
+			say("%s: %s", ch.Label, ch.Note)
+		}
+	case ch.Key != "":
+		say("key saved in %s/.env as %s", root, keyEnv)
+	case os.Getenv(keyEnv) != "":
+		say("the key comes from %s in your environment; a service started elsewhere will not see it, so copy it to %s/.env if you run her as one", keyEnv, root)
+	case ch.KeyURL != "":
+		say("get a key at %s and put it in %s/.env as %s", ch.KeyURL, root, keyEnv)
 	default:
-		say("get a key at %s and put it in %s/.env as %s", pr.KeyURL, root, pr.KeyEnv)
+		say("put the key in %s/.env as %s", root, keyEnv)
 	}
-	if pr.ID != "" && pr.Note != "" && pr.KeyEnv != "" {
-		fmt.Printf("     heads up: %s\n", pr.Note)
+	if ch.ID != "" && ch.Note != "" && keyEnv != "" {
+		fmt.Printf("     heads up: %s\n", ch.Note)
 	}
-	say("mak1zu doctor    (a real call to the provider; it says what to fix)")
+	if len(ch.P.Headers) > 0 {
+		fmt.Printf("     the extra headers are stored in %s/config.json, which is gitignored: keep secrets out of them if you can\n", root)
+	}
+	if !ch.Works {
+		say("mak1zu doctor    (a real call to the provider; it says what to fix)")
+	}
 	say("mak1zu chat      (try her in the terminal)")
 	say("mak1zu run       (panel at http://127.0.0.1:8787; Discord setup is in docs/SETUP.md)")
 	fmt.Printf("\nher rules, skills and personalities live in %s: edit them by hand or in the panel.\n", root)
@@ -353,7 +395,11 @@ func cmdRun(st *config.Store) error {
 		go func() {
 			slog.Info("web panel", "url", fmt.Sprintf("http://%s:%d", cfg.WebUI.Host, cfg.WebUI.Port))
 			if err := ps.Serve(ctx); err != nil {
-				slog.Error("web panel", "err", err)
+				if strings.Contains(err.Error(), "address already in use") {
+					slog.Error("web panel: that port is taken by another program (or another mak1zu). Pick a free one: set web_ui.port in .makizu/config.json", "port", cfg.WebUI.Port)
+				} else {
+					slog.Error("web panel", "err", err)
+				}
 				stop()
 			}
 		}()
