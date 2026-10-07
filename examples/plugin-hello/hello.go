@@ -47,7 +47,7 @@ func (Plugin) Hooks() sdk.Hooks {
 		// Add situational context for this turn only.
 		BeforeReply: func(ctx context.Context, m sdk.Message) string {
 			if strings.Contains(strings.ToLower(m.Content), "friday") {
-				return "It is almost the weekend and everyone is a little unhinged."
+				return "It is almost the weekend and everyone is a little tired."
 			}
 			return ""
 		},
