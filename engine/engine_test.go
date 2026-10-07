@@ -464,15 +464,38 @@ func TestEveryToolSchemaIsStrictlyWellFormed(t *testing.T) {
 	}
 }
 
-func TestHeavyToolsUnlockOnRealRequestsNotChatter(t *testing.T) {
-	for _, yes := range []string{"what's frieren's score on anilist?", "write me a tiny html page", "hazme un archivo json", "search for qwen benchmarks", "https://example.com/x", "how many episodes does bocchi have", "armame un script en py"} {
+func TestBigBudgetForRealRequestsNotChatter(t *testing.T) {
+	for _, yes := range []string{
+		"what's frieren's score on anilist?", "write me a tiny html page", "hazme un archivo json", "search for qwen benchmarks",
+		"https://example.com/x", "how many episodes does bocchi have", "armame un script en py",
+		// the requests that failed in the playground, plus the accent trap (Go's \b is ASCII-only)
+		"buscame algun wallpaper cool", "podrias hacerme una homepage en .html y damrela", "búscame un fondo de pantalla",
+		"armá una página", "creá un archivo", "haceme un script", "send me a wallpaper", "pasame un fondo de escritorio",
+	} {
 		if !heavyRe.MatchString(yes) {
-			t.Errorf("should unlock heavy tools: %q", yes)
+			t.Errorf("should get the big budget: %q", yes)
 		}
 	}
-	for _, no := range []string{"hey", "i love that page of the manga", "lol the file is huge", "me aburro", "you're annoying", "that episode wrecked me"} {
+	for _, no := range []string{
+		"hey", "i love that page of the manga", "lol the file is huge", "me aburro", "you're annoying", "that episode wrecked me",
+		"i generally love that page", "i like programming in go", "no puedo creer esa página", "busco trabajo", "dame un consejo", "el arma de ese personaje",
+	} {
 		if heavyRe.MatchString(no) {
-			t.Errorf("chatter must not unlock heavy tools: %q", no)
+			t.Errorf("chatter must not get the big budget: %q", no)
+		}
+	}
+}
+
+func TestEveryToolIsOfferedOnCasualTurns(t *testing.T) {
+	// whether she can search or make a file must not depend on the wording of the request
+	e, _, _ := setup(t)
+	var names []string
+	for _, s := range e.Tools.Specs(true) {
+		names = append(names, s.Name)
+	}
+	for _, want := range []string{"web_search", "wallpaper", "write_file", "read_url", "anime_search", "reaction_gif"} {
+		if !slicesContains(names, want) {
+			t.Errorf("%s is not available: %v", want, names)
 		}
 	}
 }

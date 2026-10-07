@@ -80,8 +80,8 @@ type ToolSpec struct {
 	Name        string
 	Description string
 	Schema      json.RawMessage
-	// Heavy tools get a larger token and time budget and are never run on
-	// casual chatter.
+	// Heavy marks a slow or expensive tool: once one runs, the turn gets the
+	// larger token budget. Every tool is offered on every turn.
 	Heavy bool
 }
 

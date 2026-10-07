@@ -45,8 +45,8 @@ e.Use(hello.P{})
 - **Never reach the host.** A chat user must not be able to read files, run
   shell, or hit internal URLs through you. Use `tools.Fetch` (SSRF-safe) for
   the web; do not add a tool that takes a filesystem path or a shell command.
-- **`Heavy: true`** for anything slow or expensive: it is withheld on casual
-  turns and gets the larger token budget on research turns.
+- **`Heavy: true`** for anything slow or expensive: the turn gets the larger
+  token budget once it runs. Every tool is offered on every turn; the model decides.
 - **Scope by `env.Speaker`.** Anything you store belongs to that person.
 - **Return errors as errors.** The engine turns them into text so the turn
   survives; never panic.

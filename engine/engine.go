@@ -83,6 +83,8 @@ func New(cfg *config.Store, llm Completer, mem *memory.Store, lib persona.Librar
 		e.Tools.Add(t)
 	}
 	e.Tools.Add(tools.ReactionGIF())
+	e.Tools.Add(tools.Wallpaper())
+	e.Tools.Add(tools.ImageSearch())
 	e.Tools.Add(tools.ReadSkill(func() home.Home { return e.Home() }))
 	e.Tools.Add(tools.WriteFile(func() string { return filepath.Join(filepath.Dir(cfg.Abs(cfg.Get().Memory.Path)), "workspace") }))
 	for _, t := range tools.Anime() {
@@ -232,9 +234,27 @@ type turnOut struct {
 	sideEffects bool
 }
 
-// heavyRe unlocks the heavy tools (research, files, anime lookups). Casual
-// chatter never matches, so it never pays for or triggers them.
-var heavyRe = regexp.MustCompile(`(?i)(https?://|\b(search|look up|find out|latest|news|investiga|busca|averigua|resume this|summari[sz]e|anilist|myanimelist|airing|schedule|what'?s on|how many episodes|\bairs?\b|episodios de|score of|rating of|release date)\b|\b(make|write|create|build|generate|draft|hazme|armame|armá|escribime|escribe|creá|crea)\b.{0,40}\b(html|css|file|script|page|archivo|json|csv|markdown|svg|py|go)\b)`)
+// heavyRe guesses that a message is a real request (research, a file, a
+// wallpaper, an anime lookup), which gets the larger token budget from the first
+// round: a file travels inside the tool call, so it needs room before any tool
+// has run. It does not decide which tools exist; every tool is always offered. Go's \b
+// only knows ASCII letters, so "armá" or "búscame" would never end on a word
+// boundary: the edges are spelled out with \p{L} instead.
+var heavyRe = regexp.MustCompile(`(?i)(https?://|` + wordEdge(
+	// looking things up (English, Spanish; "busca" also covers buscame, buscá, búscame)
+	`search|look up|find out|find me|latest|news|investiga\p{L}*|b[uú]sca\p{L}*|averigua\p{L}*|encuentra\p{L}*|resume this|summari[sz]e`,
+	`anilist|myanimelist|airing|schedule|what'?s on|how many episodes|airs?|episodios de|score of|rating of|release date`,
+	// wallpapers
+	`wallpapers?|fondos? de (?:pantalla|escritorio)|desktop background|fotos?|im[aá]genes?|pictures?|photos?|images?`,
+) + `|` + wordEdge(
+	// ask for a file or page: verb, then a thing, close together
+	`(?:make|write|create|build|generate|draft|send me|give me|hazme|haceme|hacerme|hacer|haz|arm(?:a|á|ame|ar)|escrib(?:e|eme|ime|ir)|escr[ií]beme|cre(?:a|á|ame|ar)|cr[eé]ame|gener(?:a|á|ame|ar)|program(?:a|á|ame|ar)|dame|pasame|p[aá]same|mandame|m[aá]ndame)`+
+		`[^\p{L}\p{N}_].{0,40}(?:\.html|html|css|file|files|script|page|homepage|web ?site|webpage|archivo|json|csv|markdown|svg|py|p[aá]gina|sitio)`,
+) + `)`)
+
+func wordEdge(parts ...string) string {
+	return `(?:^|[^\p{L}\p{N}_])(?:` + strings.Join(parts, "|") + `)(?:$|[^\p{L}\p{N}_])`
+}
 
 func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa persona.Persona) (out turnOut) {
 	cfg := e.Cfg.Get()
@@ -322,7 +342,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	}
 
 	var specs []provider.ToolDef
-	for _, s := range e.Tools.Specs(heavy) {
+	for _, s := range e.Tools.Specs(true) {
 		specs = append(specs, provider.ToolDef{Name: s.Name, Description: s.Description, Schema: s.Schema})
 	}
 	var toolsUsed []string
@@ -351,6 +371,10 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 		for _, c := range resp.ToolCalls {
 			out.sideEffects = true
 			toolsUsed = append(toolsUsed, c.Name)
+			if e.Tools.IsHeavy(c.Name) {
+				// the answer that follows research or a file needs room too
+				req.MaxTokens = max(req.MaxTokens, cfg.Behavior.Turn.HeavyTokens)
+			}
 			req.Messages = append(req.Messages, provider.Message{Role: provider.ToolRole, ToolCallID: c.ID, Content: e.Tools.Call(ctx, c.Name, c.Args, env)})
 		}
 	}
