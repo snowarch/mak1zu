@@ -118,6 +118,7 @@ textarea.big{min-height:440px}
 .ev .who{font-size:13px;color:var(--mut)}.ev .who b{color:var(--ink);font-weight:600}
 .ev .txt{overflow-wrap:anywhere;white-space:pre-wrap}
 .ev .why{display:inline-block;margin-top:3px;font-size:12px;color:var(--mut);border:1px solid var(--line);border-radius:6px;padding:0 7px}
+.ev .why.saw{display:block;border:0;padding:0;margin-top:2px}
 .ev.heard .g{background:var(--shu)}
 .ev.replied .g{background:var(--ok)}.ev.replied .txt{font-weight:500}
 .ev.quiet .txt,.ev.quiet .who{opacity:.6}

@@ -146,3 +146,24 @@ func TestParseExtractionAcceptsObjectArrayAndProse(t *testing.T) {
 		t.Fatalf("junk parsed: %v %v", f, th)
 	}
 }
+
+func TestTheFeedSaysWhatWentIntoAReply(t *testing.T) {
+	e, _, _ := setup(t, say("hey"), say("sure"))
+	ctx := context.Background()
+	e.Handle(ctx, dmFrom("1", "u1", "Alice", "hi"))
+	pid := personID(t, e, "u1")
+	e.Mem.RememberFrom(ctx, "maki", memory.Semantic, pid, "discord", "Alice has an axolotl", 0.9, "")
+	e.Mem.AddThread(ctx, pid, "discord", "exam thursday", time.Time{})
+	e.Handle(ctx, dmFrom("2", "u1", "Alice", "tell me about my axolotl"))
+	var saw string
+	for _, ev := range e.Ev.Since(0) {
+		if ev.Type == "replied" {
+			saw = ev.Saw
+		}
+	}
+	for _, want := range []string{"1 memory", "1 open thread", "prompt "} {
+		if !strings.Contains(saw, want) {
+			t.Fatalf("the feed does not say %q: %q", want, saw)
+		}
+	}
+}

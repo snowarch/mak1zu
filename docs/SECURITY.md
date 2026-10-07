@@ -26,6 +26,13 @@ test is the best report.
    10 minutes and wrong guesses are capped; a profile value (the name someone
    asks to be called) is single-line and short because it is pinned into her
    prompt; `role` is never settable through the profile or any tool.
+8. She changes herself only through the workshop: owner role, a draft with a
+   diff, a yes in a *later* message, backups, a feed entry. Only a character
+   file, a skill, a house rule or a dial from `panel.Tunable` (never secrets,
+   rooms, providers, the panel, the kill switch or anything needing a restart).
+9. A soul pack or a distilled character is text she will obey: `install`
+   shows it first, extraction refuses links and anything outside the pack, and
+   `distill` sends a cleaned sample to the provider only after consent.
 
 Each rule has a regression test; a change that weakens one needs a new test
 that explains why.

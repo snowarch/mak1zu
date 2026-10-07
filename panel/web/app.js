@@ -158,6 +158,7 @@ function feedRow(e){
   const bits=[];
   if(e.type==='replied'){
     bits.push(h('span',{class:'why'},e.words+' words · '+((e.latency_ms||0)/1000).toFixed(1)+'s'+(e.model?' · '+e.model:'')+((e.tools||[]).length?' · used '+e.tools.join(', '):'')));
+    if(e.saw)bits.push(h('div',{class:'why saw'},e.saw));
   }else if(e.why&&e.type!=='system'){
     bits.push(h('span',{class:'why'},e.why));
   }

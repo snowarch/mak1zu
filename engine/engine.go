@@ -376,6 +376,27 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 		}
 	}
 	system := persona.Compose(pa, pctx)
+	// what went into this reply, for the live feed: she is explainable, not a black box
+	var sawNote []string
+	if n := len(memText); n > 0 {
+		sawNote = append(sawNote, plural(n, "memory", "memories"))
+	}
+	if n := len(threads); n > 0 {
+		sawNote = append(sawNote, plural(n, "open thread", "open threads"))
+	}
+	if n := len(bits); n > 0 {
+		sawNote = append(sawNote, plural(n, "running bit", "running bits"))
+	}
+	if n := len(onMind); n > 0 {
+		sawNote = append(sawNote, "something on her mind")
+	}
+	if pctx.Rules != "" {
+		sawNote = append(sawNote, "house rules")
+	}
+	promptNote := fmt.Sprintf("prompt %.1fk chars (~%.1fk tokens)", float64(len(system))/1000, float64(len(system))/4000)
+	if len(sawNote) > 0 {
+		promptNote = "saw " + strings.Join(sawNote, ", ") + " · " + promptNote
+	}
 
 	msgs := e.history(ctx, m, cfg.Behavior.Turn.HistoryLimit)
 	cur := provider.Message{Role: provider.User, Content: label(name, m.Content)}
@@ -535,7 +556,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	}
 	e.Tel.Add(telemetry.Record{Kind: "turn", Persona: pa.ID, Channel: m.ChannelID, Provider: resp.Provider, Model: resp.Model,
 		Latency: time.Since(start).Seconds(), Words: len(strings.Fields(final)), Robotic: guard.RoboticHits(final), Tools: toolsUsed, Rounds: rounds})
-	e.replied(m, cfg, final, resp, time.Since(start), toolsUsed)
+	e.replied(m, cfg, final, resp, time.Since(start), toolsUsed, promptNote)
 	if cfg.Memory.AutoExtract && memoryCandidate(m.Content) {
 		if !slicesContains(toolsUsed, "remember") { // the model already saved it on purpose
 			go e.extractMemories(context.WithoutCancel(ctx), pa, m, per)
@@ -669,14 +690,14 @@ func (e *Engine) heard(m sdk.Message, cfg config.Config, spoke bool, why Reason,
 	e.Ev.Emit(events.Event{Type: t, Place: placeOf(m), Author: m.AuthorName, Text: text, Reason: string(why), Why: why.Human(), First: first})
 }
 
-func (e *Engine) replied(m sdk.Message, cfg config.Config, final string, resp provider.Response, took time.Duration, toolsUsed []string) {
+func (e *Engine) replied(m sdk.Message, cfg config.Config, final string, resp provider.Response, took time.Duration, toolsUsed []string, saw string) {
 	text := preview(final, 600)
 	if cfg.WebUI.HideMessages {
 		text = ""
 	}
 	model := strings.Trim(resp.Provider+" / "+resp.Model, " /")
 	e.Ev.Emit(events.Event{Type: "replied", Place: placeOf(m), Text: text, Words: len(strings.Fields(final)),
-		Latency: took.Milliseconds(), Model: model, Tools: toolsUsed})
+		Latency: took.Milliseconds(), Model: model, Tools: toolsUsed, Saw: saw})
 }
 
 // firstContact reports whether she has never talked with this person.
@@ -688,4 +709,11 @@ func (e *Engine) firstContact(ctx context.Context, personaID, userID string) boo
 // slip marks a moment where she caught herself: a rewrite or a broken promise.
 func (e *Engine) slip(m sdk.Message, reason, why string) {
 	e.Ev.Emit(events.Event{Type: "slip", Place: placeOf(m), Reason: reason, Why: why})
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
 }

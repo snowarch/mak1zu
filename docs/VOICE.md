@@ -6,6 +6,61 @@ October 2026. This page is what made that voice work, so a new character can be
 human without copying her. Everything here is aggregate: no names, IDs or
 private messages, and the raw conversations are not published.
 
+## Measuring a voice, and bringing your own
+
+The numbers below are not only history: they are code (`voice/`). Every
+character can ship a `voice.json` next to its `persona.md` with the bounds it
+promises to stay inside (median reply length, how often it may end on a
+question, how often one opening or phrase may repeat). Whatever it does not
+say falls back to the defaults.
+
+```bash
+mak1zu eval                 # say 16 things to the active character, print the replies and the numbers
+mak1zu eval --gate          # the same, and exit 1 when it is outside its targets
+mak1zu eval my-inputs.txt   # your own inputs, one per line
+```
+
+`eval` reads inputs from the file you give, else the character's `eval.txt`,
+else a built-in spread (a greeting, a one-word message, an insult, a sad
+moment, a factual question, a language switch). It reports length, casing,
+action openers, question endings, support-bot tells, and the most repeated
+opener and phrase: the tic detector that found "landed" in two of three praise
+replies.
+
+### Learning a character from real messages
+
+```bash
+mak1zu persona distill export.json --as "Their Name"
+```
+
+Accepts a DiscordChatExporter JSON, a Discord data package (`messages.json`), a
+WhatsApp `.txt` export, or a text file of `Name: message` lines. It picks the
+speaker, cleans their messages (links, mentions, emails, phone numbers and code
+blocks removed), measures how they write, and derives targets from that. Then it
+has your model draft a character file from about 40 of the messages, tests the
+draft against messages other people sent that this person answered, and rewrites
+it up to `--rounds` times until the replies fall inside the measured targets.
+
+What leaves your machine: only those ~40 cleaned messages and the test
+exchanges, to the provider you configured, and only after you say yes (`--yes`
+skips the question). The export stays on disk. Nothing is kept except
+`personas/<id>/persona.md`, `voice.json` and `eval.txt`. Read the persona and
+edit it: the draft is a starting point, not a verdict on a person.
+
+### Sharing a character
+
+```bash
+mak1zu persona pack maki --skills anime-recs --rules 20-rooms   # writes maki.tar.gz
+mak1zu persona install maki.tar.gz                              # or a folder, user/repo, or an https git address
+mak1zu persona use maki
+```
+
+A pack is a folder: `persona.md`, optional `voice.json` and `eval.txt`, and
+optional `skills/` and `rules/`. It contains no code, so installing runs nothing,
+but it is text she will follow, so `install` prints what is inside and asks
+first, refuses links and oversize files, and never overwrites without `--force`
+(the old version goes to `.makizu/.backup`).
+
 ## The numbers
 
 | Trait | Measured | What it means for the engine |

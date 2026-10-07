@@ -23,6 +23,7 @@ type Event struct {
 	Latency int64     `json:"latency_ms,omitempty"`
 	Model   string    `json:"model,omitempty"`
 	Tools   []string  `json:"tools,omitempty"`
+	Saw     string    `json:"saw,omitempty"` // what went into the reply: memories, threads, prompt size
 }
 
 type Hub struct {
