@@ -39,9 +39,9 @@ func readSecret(r *bufio.Reader) string {
 // It only runs on a real terminal; scripts use --provider and --key.
 func chooseProvider() (p provider.Preset, key string, err error) {
 	r := bufio.NewReader(os.Stdin)
-	fmt.Println("which model provider?")
+	fmt.Println("which model provider? (more detail: mak1zu providers, docs/PROVIDERS.md)")
 	for i, pr := range provider.Presets {
-		fmt.Printf("  %2d  %-26s %s\n", i+1, pr.Label, pr.Model)
+		fmt.Printf("  %2d  %-26s %s\n", i+1, pr.Label, pr.Cost)
 	}
 	fmt.Print("number (or a preset id): ")
 	line, _ := r.ReadString('\n')
@@ -64,4 +64,24 @@ func chooseProvider() (p provider.Preset, key string, err error) {
 	}
 	fmt.Printf("paste it (hidden; it only goes into .makizu/.env as %s), or enter to add it later: ", p.KeyEnv)
 	return p, readSecret(r), nil
+}
+
+// cmdProviders prints every preset so a script or a person can pick one
+// without opening the docs.
+func cmdProviders() {
+	for _, p := range provider.Presets {
+		fmt.Printf("%-16s %s\n", p.ID, p.Label)
+		fmt.Printf("  cost    %s\n  model   %s\n", p.Cost, p.Model)
+		switch {
+		case p.KeyEnv == "":
+			fmt.Println("  key     none needed")
+		default:
+			fmt.Printf("  key     %s  (get one: %s)\n", p.KeyEnv, p.KeyURL)
+		}
+		if p.Note != "" {
+			fmt.Printf("  note    %s\n", p.Note)
+		}
+		fmt.Println()
+	}
+	fmt.Println("use one:  mak1zu init --provider <id>")
 }

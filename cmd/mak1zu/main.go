@@ -35,7 +35,10 @@ var version = "0.1.0-dev"
 const usage = `mak1zu %s: a companion you can shape.
 
 Usage:
-  mak1zu init [dir]            create dir/.makizu with config, personas, rules and skills (default .)
+  mak1zu init [--provider ID] [dir]
+                               create dir/.makizu with config, personas, rules and skills (default .);
+                               on a terminal it asks which provider, or pass an id from "mak1zu providers"
+  mak1zu providers             list provider presets: cost, default model, where to get a key
   mak1zu run                   start the companion (Discord + web panel)
   mak1zu chat                  talk to her in the terminal
   mak1zu doctor [--offline]    check config, persona, memory and make a real call to each provider
@@ -63,6 +66,8 @@ func main() {
 		fmt.Println("mak1zu", version)
 	case "init":
 		err = cmdInitArgs(args[1:])
+	case "providers":
+		cmdProviders()
 	case "service":
 		err = cmdService(*cfgPath)
 	case "run", "chat", "doctor", "persona", "eval":
@@ -152,7 +157,7 @@ func loadDotEnv(path string) {
 
 func cmdInitArgs(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	preset := fs.String("provider", "", "provider preset id (openai, anthropic, gemini, openrouter, groq, deepseek, mistral, opencode-go, ollama, lmstudio)")
+	preset := fs.String("provider", "", "provider preset id; run \"mak1zu providers\" for the list")
 	key := fs.String("key", "", "API key for the preset (prefer the hidden prompt: flags land in shell history)")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -226,7 +231,26 @@ func cmdInit(dir string, pr provider.Preset, key string) error {
 		return err
 	}
 	_ = os.WriteFile(filepath.Join(home, ".gitignore"), []byte("config.json\n.env\ndata/\n"), 0o644)
-	fmt.Printf("created %s (%d default files, %d kept)\n\nnext:\n  1. put your API key in %s/.env (and a Discord bot token for Discord)\n  2. mak1zu doctor\n  3. mak1zu chat      (try her in the terminal)\n  4. mak1zu run       (panel at http://127.0.0.1:8787)\n\nher rules, skills and personalities live in %s: edit them by hand or in the panel.\n", home, copied, kept, home, home)
+	fmt.Printf("created %s (%d default files, %d kept)\n\nnext:\n", home, copied, kept)
+	step := 1
+	say := func(f string, a ...any) { fmt.Printf("  %d. "+f+"\n", append([]any{step}, a...)...); step++ }
+	switch {
+	case pr.ID == "":
+		say("put your API key in %s/.env and set the provider in the panel or config.json", home)
+	case pr.KeyEnv == "":
+		say("%s: %s", pr.Label, pr.Note)
+	case key != "":
+		say("key saved in %s/.env as %s", home, pr.KeyEnv)
+	default:
+		say("get a key at %s and put it in %s/.env as %s", pr.KeyURL, home, pr.KeyEnv)
+	}
+	if pr.ID != "" && pr.Note != "" && pr.KeyEnv != "" {
+		fmt.Printf("     heads up: %s\n", pr.Note)
+	}
+	say("mak1zu doctor    (a real call to the provider; it says what to fix)")
+	say("mak1zu chat      (try her in the terminal)")
+	say("mak1zu run       (panel at http://127.0.0.1:8787; Discord setup is in docs/SETUP.md)")
+	fmt.Printf("\nher rules, skills and personalities live in %s: edit them by hand or in the panel.\n", home)
 	return nil
 }
 
@@ -367,7 +391,11 @@ func cmdDoctor(st *config.Store, offline bool) error {
 	}
 	check(cfg.Validate() == nil, "config is valid")
 	_, err := persona.Library{Dir: st.Abs(cfg.Persona.Dir)}.Load(cfg.Persona.Active)
-	check(err == nil, fmt.Sprintf("persona %q loads (%v)", cfg.Persona.Active, err))
+	if err != nil {
+		check(false, fmt.Sprintf("persona %q does not load: %v", cfg.Persona.Active, err))
+	} else {
+		check(true, fmt.Sprintf("persona %q loads", cfg.Persona.Active))
+	}
 	seen := map[string]bool{}
 	for _, n := range append(append([]string{}, cfg.LLM.Routing.Text...), cfg.LLM.Routing.Vision...) {
 		if seen[n] {
@@ -396,6 +424,8 @@ func cmdDoctor(st *config.Store, offline bool) error {
 	if cfg.Discord.Enabled {
 		check(cfg.Discord.BotToken() != "", "discord token present")
 		check(cfg.Discord.OwnerID != "", "discord.owner_id set (otherwise anyone can DM her)")
+	} else {
+		fmt.Println("[skip] discord is off: terminal and panel only (docs/SETUP.md has the steps to put her in a server)")
 	}
 	if _, err := memory.Open(st.Abs(cfg.Memory.Path)); err != nil {
 		check(false, "memory db opens: "+err.Error())
