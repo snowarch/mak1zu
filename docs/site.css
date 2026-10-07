@@ -1,0 +1,141 @@
+/* Mak1zu site. Same world as the panel: sumi ink on washi paper, one shu red,
+   a dot grid. Type is Montserrat only, and it does the work: weight 200 against
+   800, upright against italic. Vanilla CSS, no build. */
+@font-face{font-family:"Montserrat";src:url(assets/fonts/Montserrat-latin.woff2) format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Montserrat";src:url(assets/fonts/Montserrat-italic-latin.woff2) format("woff2");font-weight:100 900;font-style:italic;font-display:swap}
+:root{
+  --bg:#F3F0EA;--paper:#FBF9F5;--ink:#121114;--mut:#5f5a53;--line:#d9d4ca;--soft:#ebe6dc;
+  --shu:#E4412B;--shu-text:#C2301C;--shu-ink:#fff;--dot:rgba(18,17,20,.06);
+  --sans:"Montserrat",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.16,1,.3,1);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --bg:#121114;--paper:#1a181d;--ink:#F3F0EA;--mut:#a8a299;--line:#2c2a30;--soft:#232127;
+  --shu:#EC5640;--shu-text:#F27560;--shu-ink:#121114;--dot:rgba(243,240,234,.045);color-scheme:dark}}
+:root[data-theme=dark]{--bg:#121114;--paper:#1a181d;--ink:#F3F0EA;--mut:#a8a299;--line:#2c2a30;--soft:#232127;--shu:#EC5640;--shu-text:#F27560;--shu-ink:#121114;--dot:rgba(243,240,234,.045);color-scheme:dark}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.65 var(--sans);
+  background-image:radial-gradient(var(--dot) 1.1px,transparent 1.3px);background-size:11px 11px;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+::selection{background:var(--shu);color:var(--shu-ink)}
+*{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+a{color:inherit;text-decoration-color:var(--shu);text-decoration-thickness:2px;text-underline-offset:4px}
+a:hover{color:var(--shu-text)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--shu);outline-offset:3px;border-radius:4px}
+img{display:block;max-width:100%}
+code,pre{font-family:var(--mono)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+
+/* top */
+.top{display:flex;align-items:center;gap:28px;padding:26px 0}
+.mark{font-weight:800;font-size:22px;letter-spacing:-.02em;text-decoration:none;line-height:1}
+.mark i{color:var(--shu);font-style:normal}
+.top nav{margin-left:auto;display:flex;gap:26px;align-items:center;font-size:14px;font-weight:500}
+.top nav a{text-decoration:none;color:var(--mut)}
+.top nav a:hover{color:var(--ink)}
+.top nav .gh{color:var(--ink);font-weight:700;border-bottom:2px solid var(--shu);padding-bottom:1px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:64px;align-items:center;padding:56px 0 96px}
+h1{margin:0;font-size:clamp(3.1rem,8.4vw,6rem);line-height:.96;letter-spacing:-.035em;font-weight:800;text-wrap:balance}
+h1 .thin{font-weight:200;display:block}
+h1 em{font-style:italic;font-weight:300;color:var(--shu-text);letter-spacing:-.03em}
+.hero p.lede{font-size:clamp(1.05rem,2vw,1.3rem);line-height:1.6;max-width:34em;margin:30px 0 0;color:var(--mut);font-weight:400}
+.hero p.lede b{color:var(--ink);font-weight:600}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:38px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:8px;font:600 15px/1 var(--sans);padding:15px 24px;border-radius:10px;border:1px solid var(--ink);background:none;color:var(--ink);text-decoration:none;cursor:pointer;transition:background .18s,color .18s,border-color .18s}
+.btn:hover{border-color:var(--shu);color:var(--shu-text)}
+.btn.pri{background:var(--ink);color:var(--bg)}
+.btn.pri:hover{background:var(--shu);border-color:var(--shu);color:var(--shu-ink)}
+.plate{margin:0;position:relative}
+.plate img{width:100%;aspect-ratio:4/5;object-fit:cover;object-position:50% 40%;border-radius:4px;background:#121114;outline:1px solid var(--line);outline-offset:6px}
+.plate figcaption{font-size:12.5px;color:var(--mut);margin-top:20px;line-height:1.5;font-weight:500}
+.plate figcaption b{color:var(--ink);font-weight:700}
+
+/* blocks */
+section{padding:84px 0;border-top:1px solid var(--line)}
+h2{margin:0;font-size:clamp(2rem,4.6vw,3.4rem);line-height:1.02;letter-spacing:-.03em;font-weight:800;text-wrap:balance}
+h2 .thin{font-weight:200}
+h2 em{font-style:italic;font-weight:300;color:var(--shu-text)}
+.split{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:64px;align-items:start}
+.split>div>p{max-width:30em;color:var(--mut);margin:22px 0 0}
+.rows{margin:0;padding:0;list-style:none;border-top:1px solid var(--line)}
+.rows li{display:grid;grid-template-columns:minmax(0,15em) minmax(0,1fr);gap:8px 32px;padding:22px 0;border-bottom:1px solid var(--line)}
+.rows h3{margin:0;font-size:20px;line-height:1.25;font-weight:700;letter-spacing:-.01em}
+.rows p{margin:0;color:var(--mut);font-size:16px;max-width:36em}
+.rows p b{color:var(--ink);font-weight:600}
+.rows .tag{justify-self:end;align-self:start;font-size:12px;font-weight:600;color:var(--mut);border:1px solid var(--line);border-radius:99px;padding:2px 11px;white-space:nowrap}
+.rows .tag.free{color:var(--shu-text);border-color:currentColor}
+.steps li{grid-template-columns:minmax(0,1fr)}
+.steps h3{font-weight:800}
+.steps h3 span{font-weight:300;font-style:italic;color:var(--mut)}
+
+/* the prompt */
+.prompt{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:30px 30px 26px;position:relative}
+.prompt blockquote{margin:0;font-size:clamp(1.05rem,1.7vw,1.22rem);line-height:1.65;font-weight:500;letter-spacing:-.005em}
+.prompt blockquote q{quotes:none}
+.prompt blockquote q::before{content:"\201C";color:var(--shu);font-weight:800;margin-right:2px}
+.prompt blockquote q::after{content:"\201D";color:var(--shu);font-weight:800;margin-left:2px}
+.prompt .bar{display:flex;align-items:center;gap:16px;margin-top:26px;flex-wrap:wrap}
+.prompt .bar small{color:var(--mut);font-size:13px;font-weight:500}
+.prompt .btn{padding:12px 20px;font-size:14px}
+.prompt.alt{margin-top:18px;background:none;padding:22px 26px}
+.prompt.alt blockquote{font-size:15px;font-weight:400;color:var(--mut)}
+
+/* by hand */
+pre{margin:0;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:24px 26px;overflow-x:auto;font-size:14.5px;line-height:1.85;tab-size:2}
+pre .c{color:var(--mut)}
+pre .p{color:var(--shu-text);user-select:none}
+.note{color:var(--mut);font-size:14.5px;margin:20px 0 0;max-width:42em}
+
+/* footer */
+footer{border-top:1px solid var(--line);padding:44px 0 72px;display:flex;flex-wrap:wrap;gap:20px 48px;align-items:baseline;font-size:14px;color:var(--mut)}
+footer .mark{color:var(--ink);font-size:19px}
+footer nav{display:flex;flex-wrap:wrap;gap:8px 26px;margin-left:auto;font-weight:500}
+footer nav a{text-decoration:none}
+footer nav a:hover{color:var(--ink)}
+footer p{margin:0;flex-basis:100%;font-size:13px}
+
+/* one authored moment: the headline lands line by line, the plate fades in behind it */
+@media (prefers-reduced-motion:no-preference){
+  .hero h1>*,.hero h1 .l{animation:rise 1.1s var(--ease) both}
+  .hero h1 .thin{animation-delay:.05s}
+  .hero h1 .l2{animation-delay:.18s}
+  .hero p.lede{animation:rise 1.1s var(--ease) .34s both}
+  .hero .cta{animation:rise 1.1s var(--ease) .46s both}
+  .plate{animation:fade 1.6s var(--ease) .2s both}
+  @keyframes rise{from{opacity:0;transform:translateY(22px);filter:blur(4px)}to{opacity:1;transform:none;filter:none}}
+  @keyframes fade{from{opacity:0;transform:scale(1.015)}to{opacity:1;transform:none}}
+}
+
+@media(max-width:900px){
+  .hero{grid-template-columns:1fr;gap:44px;padding:28px 0 64px}
+  .plate{max-width:420px}
+  .plate img{aspect-ratio:1/1}
+  .split{grid-template-columns:1fr;gap:36px}
+  section{padding:60px 0}
+}
+@media(max-width:600px){
+  body{font-size:16px}
+  .wrap{padding:0 20px}
+  .top{gap:16px;padding:18px 0}.top nav{gap:16px}.top nav .hide{display:none}
+  .rows li{grid-template-columns:1fr}
+  .rows .tag{justify-self:start;order:-1}
+  .prompt{padding:22px 20px}
+  pre{font-size:13px;padding:18px}
+  footer nav{margin-left:0}
+}
+#setup .steps{margin-top:56px}
+
+/* stacked sections: heading on top, the list gets the full measure */
+.split.stack{grid-template-columns:1fr;gap:44px}
+.split.stack>div>p{max-width:38em}
+.rows.wide li{grid-template-columns:minmax(0,16em) minmax(0,1fr);gap:8px 56px}
+.rows.wide p{max-width:44em}
+.rows.brainrows li{grid-template-columns:minmax(0,16em) minmax(0,1fr) 5.5em}
+@media(max-width:700px){.rows.wide li,.rows.brainrows li{grid-template-columns:1fr}}
+.steps li:last-child,.brainrows li:last-child{border-bottom:0}

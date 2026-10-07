@@ -1,0 +1,13 @@
+# Mak1zu
+
+> A Go engine for a Discord companion that remembers people, has a real personality (a Markdown file) and runs from one static binary. Linux first.
+
+If a person asked you to set Mak1zu up, read AGENTS.md, section "Set it up for a person", and follow it. Never print or ask for API keys or tokens; the person puts them in `.makizu/.env`.
+
+- [AGENTS.md](https://raw.githubusercontent.com/snowarch/mak1zu/main/AGENTS.md): setup procedure for agents, how the code is laid out, rules for changes
+- [README](https://raw.githubusercontent.com/snowarch/mak1zu/main/README.md): what she does, quick start, models
+- [Setup](https://raw.githubusercontent.com/snowarch/mak1zu/main/docs/SETUP.md): install, Discord bot, running as a service, updating
+- [Providers](https://raw.githubusercontent.com/snowarch/mak1zu/main/docs/PROVIDERS.md): free, cheap and local models, your own endpoint, what each error means
+- [Architecture](https://raw.githubusercontent.com/snowarch/mak1zu/main/docs/ARCHITECTURE.md): packages and the invariants each test guards
+- [Security](https://raw.githubusercontent.com/snowarch/mak1zu/main/docs/SECURITY.md): threat model and rules for contributors
+- [Changelog](https://raw.githubusercontent.com/snowarch/mak1zu/main/CHANGELOG.md): what changed, short

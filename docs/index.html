@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mak1zu</title>
+<meta name="description" content="A companion you shape. A Go engine for a Discord companion that remembers people, has a real personality, and runs from one static binary. Set it up with your coding agent in two minutes.">
+<link rel="canonical" href="https://snowarch.github.io/mak1zu/">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preload" href="assets/fonts/Montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
+<meta property="og:type" content="website">
+<meta property="og:title" content="Mak1zu: the companion you shape">
+<meta property="og:description" content="Remembers people, has a real personality, runs from one static binary. Set up with your coding agent in two minutes.">
+<meta property="og:url" content="https://snowarch.github.io/mak1zu/">
+<meta property="og:image" content="https://snowarch.github.io/mak1zu/assets/social.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#F3F0EA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121114" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <a class="mark" href="./" aria-label="Mak1zu">Mak<i>1</i>zu</a>
+  <nav aria-label="Main">
+    <a href="#setup">Set up</a>
+    <a href="#what">What she does</a>
+    <a href="#brain" class="hide">Models</a>
+    <a href="https://github.com/snowarch/mak1zu/blob/main/docs/SETUP.md" class="hide">Docs</a>
+    <a class="gh" href="https://github.com/snowarch/mak1zu">GitHub</a>
+  </nav>
+</header>
+
+<main>
+<div class="hero">
+  <div>
+    <h1><span class="thin l">The companion</span><span class="l l2">you <em>shape.</em></span></h1>
+    <p class="lede">A Go engine for a Discord companion that <b>remembers people</b>, has a <b>real personality</b>, and runs from one static binary. Her character is a Markdown file. Yours to rewrite.</p>
+    <div class="cta">
+      <a class="btn pri" href="#setup">Set it up with your AI</a>
+      <a class="btn" href="#hand">By hand</a>
+    </div>
+  </div>
+  <figure class="plate">
+    <img src="assets/maki.webp" width="512" height="512" alt="Maki, the default character: a woman in profile with long pale hair, in front of a red halftone sun.">
+    <figcaption><b>Maki</b>, the character that ships with her. Flat and dry on the surface, shy underneath. Swap her for anyone by editing one file.</figcaption>
+  </figure>
+</div>
+
+<section id="setup">
+  <div class="split">
+    <div>
+      <h2><span class="thin">Two minutes,</span><br>your <em>agent</em> does the typing.</h2>
+      <p>Claude Code, Codex, opencode, Cursor, Gemini CLI: anything that can run commands. Paste this. It reads the repo's <code>AGENTS.md</code> and sets her up on your machine.</p>
+    </div>
+    <div>
+      <div class="prompt">
+        <blockquote><q id="prompt">Set up Mak1zu for me. Clone https://github.com/snowarch/mak1zu, read its AGENTS.md and follow "Set it up for a person". Ask me only what you can't work out yourself, one question at a time. Never print my keys: tell me which file to put them in.</q></blockquote>
+        <div class="bar">
+          <button class="btn pri" type="button" id="copy" data-for="prompt">Copy the prompt</button>
+          <small>Only a chat window? <a href="https://github.com/snowarch/mak1zu#set-it-up-with-your-ai-two-minutes">There is a prompt for that too.</a></small>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="rows steps">
+    <li><h3>Installs her. <span>One binary, no CGO, any Linux.</span></h3></li>
+    <li><h3>Asks one thing: which model. <span>There are free ones, no card.</span></h3></li>
+    <li><h3>You put the key in a file. <span>It never passes through the chat.</span></h3></li>
+    <li><h3>Proves it with a real call. <span>If it fails, it says what to fix.</span></h3></li>
+    <li><h3>Then you talk to her. <span>Discord is one optional step after.</span></h3></li>
+  </ul>
+</section>
+
+<section id="what">
+  <div class="split stack">
+    <div>
+      <h2>Not customer support<br><em>in a costume.</em></h2>
+      <p>A shared layer of rules for how people actually type: short, opinionated, imperfect. A small file for who the character is. A guard that strips the tells. The numbers come from measuring thousands of real replies.</p>
+    </div>
+    <ul class="rows wide">
+      <li><h3>Memory stays with the person</h3><p>What you told her, what is still open in your life, running jokes that rest between callbacks. One person across Discord and the terminal. <b>One person's memory never reaches another's prompt.</b> A test proves it.</p></li>
+      <li><h3>A voice you can measure</h3><p><code>mak1zu eval --gate</code> fails when she drifts. <code>persona distill</code> learns a character from somebody's real messages.</p></li>
+      <li><h3>She writes first, if you let her</h3><p>A night shift that tidies memory and keeps a diary you can read. Quiet hours, a daily cap, and "stop" is honoured. Off until you turn it on.</p></li>
+      <li><h3>She changes herself when you ask</h3><p>A new skill, a house rule, a different character. She shows the diff and applies it only after your yes in a <b>later</b> message.</p></li>
+      <li><h3>Servers, DMs, house rules</h3><p>Home channels where she talks freely. Mention-only channels where only a real <code>@mention</code> wakes her.</p></li>
+      <li><h3>Extensible in about 20 lines</h3><p>Tools and hooks in Go, any MCP server as a tool source, personalities in Markdown.</p></li>
+    </ul>
+  </div>
+  <p class="note">She cannot read your files or run commands from chat, by design. What has been tested live and what has not is in the <a href="https://github.com/snowarch/mak1zu/blob/main/ROADMAP.md">roadmap</a>, plainly.</p>
+</section>
+
+<section id="brain">
+  <div class="split stack">
+    <div>
+      <h2><span class="thin">Bring</span> any <em>brain.</em></h2>
+      <p>Thirteen presets, or paste the address of anything that speaks the OpenAI API. Ordered fallbacks, a circuit breaker, and setup makes a real call before it says it's done.</p>
+    </div>
+    <ul class="rows wide brainrows">
+      <li><div><h3>openrouter-free</h3></div><p>Free models through OpenRouter. About 20 requests a minute; free endpoints may train on your prompts.</p><span class="tag free">free</span></li>
+      <li><div><h3>cline</h3></div><p>Free promo models, then pay as you go.</p><span class="tag free">free</span></li>
+      <li><div><h3>ollama, lmstudio</h3></div><p>On your own machine. Slower, and nothing ever leaves it. Found automatically if running.</p><span class="tag free">local</span></li>
+      <li><div><h3>opencode-go, deepseek, gemini, groq</h3></div><p>Cheap and good. Also openai, anthropic, mistral and openrouter.</p><span class="tag">your key</span></li>
+      <li><div><h3>Your own URL</h3></div><p>vLLM, llama.cpp, LiteLLM, Together, a company gateway. It lists the models it serves and you pick.</p><span class="tag">any</span></li>
+    </ul>
+  </div>
+</section>
+
+<section id="hand">
+  <div class="split">
+    <div>
+      <h2>Or <em>by hand.</em></h2>
+      <p>Go 1.27 or newer. Putting her in a Discord server takes a bot token and one intent switch; the setup guide walks through it.</p>
+    </div>
+    <div>
+      <pre><code><span class="c"># install</span>
+<span class="p">$ </span>git clone https://github.com/snowarch/mak1zu ~/src/mak1zu
+<span class="p">$ </span>cd ~/src/mak1zu &amp;&amp; make install
+<span class="c"># give her a home and a brain</span>
+<span class="p">$ </span>mkdir ~/mak1zu &amp;&amp; cd ~/mak1zu
+<span class="p">$ </span>mak1zu init
+<span class="p">$ </span>mak1zu doctor
+<span class="c"># talk to her, then put her on Discord</span>
+<span class="p">$ </span>mak1zu
+<span class="p">$ </span>mak1zu run</code></pre>
+      <p class="note">The panel is at <code>127.0.0.1:8787</code>: a live feed of what she heard and why she stayed quiet, her models, rooms, dials and personality file. Changes apply instantly.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <a class="mark" href="./">Mak<i>1</i>zu</a>
+  <nav aria-label="Project">
+    <a href="https://github.com/snowarch/mak1zu">GitHub</a>
+    <a href="https://github.com/snowarch/mak1zu/blob/main/docs/SETUP.md">Setup</a>
+    <a href="https://github.com/snowarch/mak1zu/blob/main/docs/PROVIDERS.md">Providers</a>
+    <a href="https://github.com/snowarch/mak1zu/blob/main/docs/ARCHITECTURE.md">Architecture</a>
+    <a href="https://github.com/snowarch/mak1zu/blob/main/CHANGELOG.md">Changelog</a>
+    <a href="https://github.com/snowarch/mak1zu/blob/main/AGENTS.md">For agents</a>
+    <a href="https://github.com/snowarch/mak1zu/blob/main/SECURITY.md">Security</a>
+  </nav>
+  <p>Apache-2.0 with a NOTICE: keep the credit "Based on Mak1zu by snowarch". The name and artwork are not covered by the license. Montserrat by Julieta Ulanovsky et al., SIL OFL 1.1.</p>
+</footer>
+
+</div>
+<script>
+document.getElementById("copy").addEventListener("click",function(){
+  var b=this,t=document.getElementById(b.dataset.for).textContent.trim();
+  function done(ok){var o=b.textContent;b.textContent=ok?"Copied":"Select it and copy";setTimeout(function(){b.textContent=o},1800)}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){done(true)},function(){done(false)})}else{done(false)}
+});
+</script>
+</body>
+</html>
