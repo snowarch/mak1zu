@@ -55,6 +55,7 @@ type choice struct {
 // wizard asks the questions. Everything it touches from outside (terminal,
 // network, environment) is a field, so the whole conversation is testable.
 type wizard struct {
+	ui      ui // nil unless both ends are a terminal; then questions are asked with arrow keys
 	in      *bufio.Reader
 	out     io.Writer
 	secret  func() string
@@ -67,7 +68,12 @@ type wizard struct {
 
 func newWizard() *wizard {
 	r := bufio.NewReader(os.Stdin)
+	var u ui
+	if isTTY(os.Stdin) && isTTY(os.Stdout) {
+		u = huhUI{}
+	}
 	return &wizard{
+		ui: u,
 		in: r, out: os.Stdout,
 		secret:  func() string { return readSecret(r) },
 		getenv:  os.Getenv,
@@ -81,6 +87,9 @@ func newWizard() *wizard {
 func (w *wizard) say(f string, a ...any) { fmt.Fprintf(w.out, f+"\n", a...) }
 
 func (w *wizard) ask(prompt string) (string, error) {
+	if w.ui != nil {
+		return w.ui.input(prompt, false)
+	}
 	fmt.Fprint(w.out, prompt)
 	line, err := w.in.ReadString('\n')
 	if err != nil && strings.TrimSpace(line) == "" {
@@ -90,6 +99,10 @@ func (w *wizard) ask(prompt string) (string, error) {
 }
 
 func (w *wizard) askSecret(prompt string) string {
+	if w.ui != nil {
+		v, _ := w.ui.input(prompt, true)
+		return v
+	}
 	fmt.Fprint(w.out, prompt)
 	return w.secret()
 }
@@ -115,16 +128,28 @@ func (w *wizard) choose(ctx context.Context) (choice, error) {
 	}
 	rows = append(rows, menuRow{custom: true})
 
-	w.say("which model provider? pick a number, a preset id, or paste your own URL.")
-	w.say("(your own server, a gateway, any OpenAI-compatible API: the last entry.)")
-	for i, r := range rows {
-		label, detail := w.describe(r, locals)
-		w.say("  %2d  %-30s %s", i+1, label, detail)
-	}
-
 	var row menuRow
 	var prefill string
-	for tries := 0; ; tries++ {
+	if w.ui != nil {
+		labels := make([]string, len(rows))
+		for i, r := range rows {
+			l, d := w.describe(r, locals)
+			labels[i] = fmt.Sprintf("%-28s %s", l, d)
+		}
+		i, err := w.ui.pick("which model provider?  (type to filter; the last entry is any OpenAI-compatible URL)", labels)
+		if err != nil {
+			return choice{}, err
+		}
+		row = rows[i]
+	} else {
+		w.say("which model provider? pick a number, a preset id, or paste your own URL.")
+		w.say("(your own server, a gateway, any OpenAI-compatible API: the last entry.)")
+		for i, r := range rows {
+			label, detail := w.describe(r, locals)
+			w.say("  %2d  %-30s %s", i+1, label, detail)
+		}
+	}
+	for tries := 0; w.ui == nil; tries++ {
 		line, err := w.ask("number, preset id or URL: ")
 		if err != nil {
 			return choice{}, err
@@ -196,7 +221,7 @@ func portOf(raw string) string {
 func (w *wizard) describe(r menuRow, locals []provider.Local) (string, string) {
 	switch {
 	case r.custom:
-		return "Your own URL", "any OpenAI-compatible endpoint: vLLM, LiteLLM, Together, a company gateway"
+		return "Your own URL", "vLLM, LiteLLM, Together, any OpenAI-compatible API"
 	case r.local != nil:
 		return r.local.Name + " (local)", fmt.Sprintf("running now on %s, %s", strings.TrimSuffix(strings.TrimPrefix(r.local.BaseURL, "http://"), "/v1"), plural(len(r.local.Models), "model"))
 	}
@@ -327,12 +352,27 @@ func (w *wizard) custom(ctx context.Context, prefill string) (choice, error) {
 		return ch, err
 	}
 	ch.P.Model = m
+	if w.ui != nil {
+		v, err := w.ui.confirm("can this model read images?")
+		ch.P.Vision = v
+		return ch, err
+	}
 	if a, err := w.ask("can this model read images? [y/N]: "); err != nil {
 		return ch, err
 	} else if strings.HasPrefix(strings.ToLower(a), "y") {
 		ch.P.Vision = true
 	}
 	return ch, nil
+}
+
+func filterOut(l []string, drop string) []string {
+	var out []string
+	for _, s := range l {
+		if s != drop {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func firstNonEmpty(a ...string) string {
@@ -350,6 +390,26 @@ func (w *wizard) askModel(ctx context.Context, ch choice, def string, models []s
 	if def == "" && len(models) == 1 {
 		w.say("using the only model it serves: %s", models[0])
 		return models[0], nil
+	}
+	if w.ui != nil && len(models) > 0 {
+		opts := append([]string(nil), models...)
+		if def != "" {
+			opts = append([]string{def + "  (default)"}, filterOut(models, def)...)
+		}
+		opts = append(opts, "something else: type a model id")
+		i, err := w.ui.pick("which model?", opts)
+		if err != nil {
+			return "", err
+		}
+		switch {
+		case i == len(opts)-1:
+			return w.ui.input("model id", false)
+		case def != "" && i == 0:
+			return def, nil
+		case def != "":
+			return filterOut(models, def)[i-1], nil
+		}
+		return models[i], nil
 	}
 	show := func() {
 		const cap = 30

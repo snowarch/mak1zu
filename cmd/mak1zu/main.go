@@ -73,7 +73,8 @@ func main() {
 	provider.UserAgent = "mak1zu/" + version + " (+https://github.com/snowarch/mak1zu)"
 	tools.UserAgent = provider.UserAgent
 	args := flag.Args()
-	if len(args) == 0 {
+	implicit := len(args) == 0 // plain `mak1zu`: the terminal chat, or first-run setup if there is nothing yet
+	if implicit {
 		args = []string{"tui"}
 	}
 	var err error
@@ -89,6 +90,9 @@ func main() {
 	case "run", "chat", "tui", "doctor", "persona", "eval", "link", "night":
 		var st *config.Store
 		if st, err = loadConfig(*cfgPath); err != nil {
+			if implicit && isTTY(os.Stdin) && isTTY(os.Stdout) {
+				err = firstRun()
+			}
 			break
 		}
 		switch args[0] {
@@ -121,6 +125,19 @@ func main() {
 		fmt.Fprintln(os.Stderr, "mak1zu:", err)
 		os.Exit(1)
 	}
+}
+
+// firstRun is what plain `mak1zu` does when she has not been set up: the same
+// questions as `mak1zu init`, with her home in ~/.config/mak1zu (which every
+// later command finds from any folder), then straight into the chat.
+func firstRun() error {
+	h, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Join(h, ".config", "mak1zu")
+	fmt.Printf("nobody lives here yet. let's set her up (her home will be %s).\n\n", filepath.Join(dir, ".makizu"))
+	return cmdInitArgs([]string{dir})
 }
 
 func findConfig(explicit string) (string, error) {
@@ -238,7 +255,19 @@ func cmdInitArgs(args []string) error {
 			return err
 		}
 	}
-	return cmdInit(dir, ch)
+	if err := cmdInit(dir, ch); err != nil {
+		return err
+	}
+	if w.ui != nil && ch.Works { // a real terminal and a model that answered: do not make them type the next command
+		if yes, err := w.ui.confirm("say hi to her now?"); err == nil && yes {
+			st, err := config.Load(filepath.Join(dir, ".makizu", "config.json"))
+			if err != nil {
+				return err
+			}
+			return cmdTUI(st)
+		}
+	}
+	return nil
 }
 
 func cmdInit(dir string, ch choice) error {
@@ -316,8 +345,8 @@ func cmdInit(dir string, ch choice) error {
 	if !ch.Works {
 		say("mak1zu doctor    (a real call to the provider; it says what to fix)")
 	}
-	say("mak1zu chat      (try her in the terminal)")
-	say("mak1zu run       (panel at http://127.0.0.1:8787; Discord setup is in docs/SETUP.md)")
+	say("mak1zu           (talk to her in the terminal)")
+	say("mak1zu run       (Discord and the web panel at http://127.0.0.1:8787; setup is in docs/SETUP.md)")
 	fmt.Printf("\nher rules, skills and personalities live in %s: edit them by hand or in the panel.\n", root)
 	return nil
 }
@@ -369,7 +398,7 @@ func cmdRun(st *config.Store) error {
 		}
 		tr = dt
 	} else {
-		slog.Warn("discord.enabled is false: only the web panel will run (use `mak1zu chat` to talk to her)")
+		slog.Warn("discord.enabled is false: only the web panel will run (run `mak1zu` to talk to her in the terminal)")
 		tr = idle{}
 	}
 	e, mem, router, err := build(st, tr)

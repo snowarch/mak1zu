@@ -15,6 +15,7 @@ The default character is **Maki**: flat and dry on the surface, shy underneath. 
 - **Memory that stays with the person.** SQLite with full-text search: what you told her and where, what is still open in your life (an exam, a sick cat), running jokes that rest between callbacks, what to call you, reminders, `forget me`. You are one person across Discord and the terminal (`/link`), and `/memories` shows everything she holds. One person's memory never reaches another person's prompt; a test proves it.
 - **A night shift (opt-in).** Once a day she goes over her conversations with the people she actually talked to, tidies what she knows, writes a short private diary entry you can read with `/diary`, and decides what she would like to bring up next time. A few model calls a night, capped, off until you turn it on; try it with `mak1zu night --dry-run`.
 - **Any model.** Thirteen presets, or paste the address of anything that speaks the OpenAI API (vLLM, llama.cpp, LiteLLM, Together, a company gateway). Ordered fallbacks, a circuit breaker, vision routing, and `init` makes a real call to prove it works before it finishes: [docs/PROVIDERS.md](docs/PROVIDERS.md).
+- **A terminal chat.** Plain `mak1zu` opens it: it attaches to a running `mak1zu run`, or starts her itself, so there is nothing to launch first. On a machine with no setup yet the same command asks the questions (arrow keys, type to filter, hidden key) and drops you into the chat. The same person as your Discord account once you `/link` them.
 - **A web panel** on `127.0.0.1:8787`: live feed of what she heard and why she stayed quiet, models, rooms, dials, her personality file. Changes apply instantly; keys are write-only.
 - **A guard on every reply.** No leaked prompts, no tool protocol, no `*stares*` ten times in a row, no "I'd be happy to help". A reply that promises an attachment and has none is caught.
 - **Extensible.** Tools and hooks in about 20 lines of Go, any [MCP](https://modelcontextprotocol.io) server as a tool source, transports in five methods, personalities in Markdown. [docs/SDK.md](docs/SDK.md)
@@ -51,7 +52,7 @@ make install         # builds and copies mak1zu to ~/.local/bin
 mkdir ~/mak1zu && cd ~/mak1zu
 mak1zu init          # pick a provider or paste your own URL, paste the key (hidden)
 mak1zu doctor        # one real call; if it fails, it says what to fix
-mak1zu chat          # try her in the terminal
+mak1zu               # talk to her in the terminal
 mak1zu run           # Discord + panel at http://127.0.0.1:8787
 ```
 
