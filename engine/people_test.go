@@ -161,3 +161,23 @@ func TestAccountClaimNeverStealsOwner(t *testing.T) {
 		t.Fatal("local account claimed the owner role while another owner exists")
 	}
 }
+
+func TestBridgedHumanWebhookIsAPersonButARealBotIsNot(t *testing.T) {
+	e, _, _ := setup(t, say("hi"), say("hi"))
+	ctx := context.Background()
+	e.Cfg.Patch(map[string]any{"discord.human_webhooks": []any{"wh1"}})
+	h := msg("1", "hello")
+	h.IsBot, h.WebhookID, h.AuthorID, h.AuthorName = true, "wh1", "bridge-user", "Bridged"
+	e.Handle(ctx, h)
+	if _, ok, _ := e.Mem.Lookup(ctx, "discord", "bridge-user"); !ok {
+		t.Fatal("a bridged human is not a person")
+	}
+	b := msg("2", "hello")
+	b.IsBot, b.AuthorID, b.AuthorName, b.Mentioned = true, "some-bot", "SomeBot", false
+	if p := e.person(ctx, b); p.ID != "some-bot" {
+		t.Fatalf("a real bot became a person: %+v", p)
+	}
+	if _, ok, _ := e.Mem.Lookup(ctx, "discord", "some-bot"); ok {
+		t.Fatal("a real bot got an account")
+	}
+}
