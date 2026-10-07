@@ -33,7 +33,7 @@ func args[T any](raw json.RawMessage) (T, error) {
 // Builtins returns the standard toolbox.
 func Builtins(d Deps) []sdk.Tool {
 	t := []sdk.Tool{
-		sdk.ToolFunc{S: sdk.ToolSpec{Name: "now", Description: "Current date and time (UTC and local).", Schema: Schema(nil, nil)},
+		sdk.ToolFunc{S: sdk.ToolSpec{Name: "now", Description: "Current date and time.", Schema: Schema(nil, nil)},
 			F: func(ctx context.Context, _ json.RawMessage, _ *sdk.CallEnv) (string, error) {
 				n := time.Now()
 				return n.Format(time.RFC1123) + " / " + n.UTC().Format(time.RFC3339), nil
