@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -55,22 +54,14 @@ func (e *Engine) Commands() []sdk.Command {
 					return "give me a sentence (8 to 400 characters)"
 				}
 				pa := e.Cfg.Get().Persona.Active
-				if _, err := e.Mem.Remember(ctx, pa, memory.Semantic, e.account(ctx, c.UserID, c.UserName).ID, note, 0.7, "command"); err != nil {
+				if _, err := e.Mem.RememberFrom(ctx, pa, memory.Semantic, e.account(ctx, c.UserID, c.UserName).ID, e.Tr.Name(), note, 0.7, "command"); err != nil {
 					return "could not save that"
 				}
 				return "noted"
 			}},
-		{Name: "memories", Description: "Show what she remembers about you (only you can see this)",
+		{Name: "memories", Description: "Show everything she holds about you: memories, open threads, running bits (only you can see this)",
 			Run: func(ctx context.Context, c sdk.CommandCall) string {
-				ms, _ := e.Mem.Recall(ctx, e.Cfg.Get().Persona.Active, e.account(ctx, c.UserID, c.UserName).ID, "", 10)
-				if len(ms) == 0 {
-					return "nothing yet"
-				}
-				var b strings.Builder
-				for _, m := range ms {
-					fmt.Fprintf(&b, "#%d %s\n", m.ID, m.Content)
-				}
-				return b.String()
+				return e.ledgerView(ctx, e.Cfg.Get().Persona.Active, e.account(ctx, c.UserID, c.UserName))
 			}},
 		{Name: "callme", Description: "Tell her what to call you, on every platform you use",
 			Options: []sdk.CommandOption{{Name: "name", Description: "what she should call you (empty to reset)", Required: false}},
@@ -102,8 +93,8 @@ func (e *Engine) Commands() []sdk.Command {
 				}
 				return "code " + code + " (10 minutes, one use). On the other account say /link " + code + " or run `mak1zu link " + code + "` on the machine."
 			}},
-		{Name: "forget", Description: "Forget one memory by number, or everything about you with `all`",
-			Options: []sdk.CommandOption{{Name: "what", Description: "memory number or `all`", Required: true}},
+		{Name: "forget", Description: "Forget one memory by number, `thread N`, `bit N`, or everything about you with `all`",
+			Options: []sdk.CommandOption{{Name: "what", Description: "memory number, `thread N`, `bit N` or `all`", Required: true}},
 			Run: func(ctx context.Context, c sdk.CommandCall) string {
 				w := strings.TrimSpace(strings.ToLower(c.Args["what"]))
 				if w == "all" {
@@ -112,9 +103,26 @@ func (e *Engine) Commands() []sdk.Command {
 					}
 					return "everything about you is gone"
 				}
+				if kind, rest, ok := strings.Cut(w, " "); ok && (kind == "thread" || kind == "bit") {
+					n, err := strconv.ParseInt(strings.TrimLeft(strings.TrimSpace(rest), "tb#"), 10, 64)
+					if err != nil {
+						return "give me the number, like `" + kind + " 3`"
+					}
+					p := e.account(ctx, c.UserID, c.UserName)
+					var done bool
+					if kind == "thread" {
+						done, _ = e.Mem.CloseThread(ctx, p.ID, n)
+					} else {
+						done, _ = e.Mem.DropBit(ctx, p.ID, n)
+					}
+					if done {
+						return "gone"
+					}
+					return "no such " + kind + " of yours"
+				}
 				id, err := strconv.ParseInt(strings.TrimPrefix(w, "#"), 10, 64)
 				if err != nil {
-					return "give me a memory number or `all`"
+					return "give me a memory number, `thread N`, `bit N` or `all`"
 				}
 				if ok, _ := e.Mem.Forget(ctx, e.account(ctx, c.UserID, c.UserName).ID, id); ok {
 					return "forgotten"

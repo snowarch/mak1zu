@@ -8,7 +8,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -132,10 +131,10 @@ func Open(path string) (*Store, error) {
 	if path == ":memory:" {
 		db.SetMaxOpenConns(1)
 	}
-	if _, err := db.Exec(schema + personSchema); err != nil {
+	if _, err := db.Exec(schema + personSchema + ledgerSchema); err != nil {
 		return nil, fmt.Errorf("memory schema: %w", err)
 	}
-	if err := migratePeople(db); err != nil {
+	if err := migrate(db); err != nil {
 		return nil, fmt.Errorf("memory migrate: %w", err)
 	}
 	if path != ":memory:" {
@@ -159,6 +158,7 @@ type Memory struct {
 	Importance float64
 	Score      float64
 	Tags       string
+	Source     string // the transport it was learned on ("" for old rows)
 	Created    string
 	Accessed   string
 	Count      int
@@ -167,6 +167,12 @@ type Memory struct {
 // Remember stores a memory. Near-duplicates (same user, same normalized text)
 // bump the existing row instead of piling up.
 func (s *Store) Remember(ctx context.Context, persona string, k Kind, userID, content string, importance float64, tags string) (int64, error) {
+	return s.RememberFrom(ctx, persona, k, userID, "", content, importance, tags)
+}
+
+// RememberFrom is Remember with provenance: the transport it was learned on,
+// so she can say "you told me on the terminal" and mean it.
+func (s *Store) RememberFrom(ctx context.Context, persona string, k Kind, userID, source, content string, importance float64, tags string) (int64, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return 0, errors.New("empty memory")
@@ -183,8 +189,8 @@ func (s *Store) Remember(ctx context.Context, persona string, k Kind, userID, co
 			blob = encodeVec(v)
 		}
 	}
-	res, err := s.db.ExecContext(ctx, `INSERT INTO memories(persona,kind,content,user_id,importance,tags,embedding,created,accessed) VALUES(?,?,?,?,?,?,?,?,?)`,
-		persona, string(k), content, userID, importance, tags, blob, now(), now())
+	res, err := s.db.ExecContext(ctx, `INSERT INTO memories(persona,kind,content,user_id,importance,tags,embedding,source,created,accessed) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+		persona, string(k), content, userID, importance, tags, blob, source, now(), now())
 	if err != nil {
 		return 0, err
 	}
@@ -215,10 +221,10 @@ func (s *Store) Recall(ctx context.Context, persona, userID, query string, limit
 	var rows *sql.Rows
 	var err error
 	if fq == "" {
-		rows, err = s.db.QueryContext(ctx, `SELECT id,persona,kind,content,user_id,importance,score,tags,created,accessed,access_count FROM memories
+		rows, err = s.db.QueryContext(ctx, `SELECT id,persona,kind,content,user_id,importance,score,tags,source,created,accessed,access_count FROM memories
 			WHERE (user_id=? OR user_id='') AND persona IN (?, '') AND kind!='introspective' ORDER BY importance*score DESC, accessed DESC LIMIT ?`, userID, persona, limit)
 	} else {
-		rows, err = s.db.QueryContext(ctx, `SELECT m.id,m.persona,m.kind,m.content,m.user_id,m.importance,m.score,m.tags,m.created,m.accessed,m.access_count
+		rows, err = s.db.QueryContext(ctx, `SELECT m.id,m.persona,m.kind,m.content,m.user_id,m.importance,m.score,m.tags,m.source,m.created,m.accessed,m.access_count
 			FROM memories_fts f JOIN memories m ON m.id=f.rowid
 			WHERE memories_fts MATCH ? AND (m.user_id=? OR m.user_id='') AND m.persona IN (?, '') AND m.kind!='introspective'
 			ORDER BY bm25(memories_fts) - (m.importance*m.score) LIMIT ?`, fq, userID, persona, limit*4)
@@ -231,7 +237,7 @@ func (s *Store) Recall(ctx context.Context, persona, userID, query string, limit
 	for rows.Next() {
 		var m Memory
 		var k string
-		if err := rows.Scan(&m.ID, &m.Persona, &k, &m.Content, &m.UserID, &m.Importance, &m.Score, &m.Tags, &m.Created, &m.Accessed, &m.Count); err != nil {
+		if err := rows.Scan(&m.ID, &m.Persona, &k, &m.Content, &m.UserID, &m.Importance, &m.Score, &m.Tags, &m.Source, &m.Created, &m.Accessed, &m.Count); err != nil {
 			return nil, err
 		}
 		m.Kind = Kind(k)
@@ -325,6 +331,7 @@ func (s *Store) ForgetUser(ctx context.Context, userID string) error {
 		`DELETE FROM memories WHERE user_id=?`, `DELETE FROM people WHERE user_id=?`,
 		`DELETE FROM relationships WHERE user_id=?`, `DELETE FROM facts WHERE user_id=?`, `DELETE FROM turns WHERE user_id=?`, `DELETE FROM reminders WHERE user_id=?`,
 		`DELETE FROM accounts WHERE person_id=?`, `DELETE FROM link_codes WHERE person_id=?`,
+		`DELETE FROM threads WHERE person_id=?`, `DELETE FROM bits WHERE person_id=?`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, userID); err != nil {
 			return err
@@ -355,7 +362,6 @@ type Relationship struct {
 	Dynamic      string
 	Familiarity  float64
 	Interactions int
-	InsideJokes  []string
 }
 
 // Touch records an interaction and nudges familiarity up with diminishing returns.
@@ -372,37 +378,16 @@ func (s *Store) Touch(ctx context.Context, persona, userID, name string) error {
 
 func (s *Store) Relationship(ctx context.Context, persona, userID string) (Relationship, error) {
 	r := Relationship{UserID: userID, Persona: persona}
-	var jokes string
-	err := s.db.QueryRowContext(ctx, `SELECT r.dynamic,r.familiarity,r.interactions,r.inside_jokes,coalesce(p.name,'') FROM relationships r LEFT JOIN people p ON p.user_id=r.user_id WHERE r.user_id=? AND r.persona=?`,
-		userID, persona).Scan(&r.Dynamic, &r.Familiarity, &r.Interactions, &jokes, &r.Name)
+	err := s.db.QueryRowContext(ctx, `SELECT r.dynamic,r.familiarity,r.interactions,coalesce(p.name,'') FROM relationships r LEFT JOIN people p ON p.user_id=r.user_id WHERE r.user_id=? AND r.persona=?`,
+		userID, persona).Scan(&r.Dynamic, &r.Familiarity, &r.Interactions, &r.Name)
 	if errors.Is(err, sql.ErrNoRows) {
 		return r, nil
 	}
-	_ = json.Unmarshal([]byte(jokes), &r.InsideJokes)
 	return r, err
 }
 
 func (s *Store) SetDynamic(ctx context.Context, persona, userID, dynamic string) error {
 	_, err := s.db.ExecContext(ctx, `UPDATE relationships SET dynamic=? WHERE user_id=? AND persona=?`, dynamic, userID, persona)
-	return err
-}
-
-func (s *Store) AddInsideJoke(ctx context.Context, persona, userID, joke string) error {
-	r, err := s.Relationship(ctx, persona, userID)
-	if err != nil {
-		return err
-	}
-	for _, j := range r.InsideJokes {
-		if strings.EqualFold(j, joke) {
-			return nil
-		}
-	}
-	js := append(r.InsideJokes, joke)
-	if len(js) > 8 {
-		js = js[len(js)-8:]
-	}
-	b, _ := json.Marshal(js)
-	_, err = s.db.ExecContext(ctx, `UPDATE relationships SET inside_jokes=? WHERE user_id=? AND persona=?`, string(b), userID, persona)
 	return err
 }
 
@@ -422,9 +407,6 @@ func (r Relationship) Describe() string {
 	}
 	if r.Dynamic != "" {
 		b.WriteString(" Dynamic: " + r.Dynamic)
-	}
-	if len(r.InsideJokes) > 0 {
-		b.WriteString(" Inside jokes: " + strings.Join(r.InsideJokes, "; ") + ".")
 	}
 	return b.String()
 }

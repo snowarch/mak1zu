@@ -5,9 +5,9 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +30,8 @@ type Person struct {
 	Language  string
 	TZ        string
 	Role      string // "" or RoleOwner
+	Checkins  string // "off" when they asked her not to start conversations
+	Quiet     string // "23:00-08:00": hours she must not message them
 	FirstSeen string
 	LastSeen  string
 }
@@ -61,42 +63,45 @@ CREATE TABLE IF NOT EXISTS link_codes(
 );
 `
 
-// migratePeople adds the profile columns to a database created before persons
-// existed. Old rows keep their id: it simply becomes a person id.
-func migratePeople(db *sql.DB) error {
-	have := map[string]bool{}
-	rows, err := db.Query(`PRAGMA table_info(people)`)
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var cid int
-		var name, typ string
-		var notnull, pk int
-		var dflt sql.NullString
-		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
-			rows.Close()
+// migrate adds columns that databases created by older versions lack. Old
+// rows keep their ids: a legacy user id simply becomes a person id.
+func migrate(db *sql.DB) error {
+	for table, cols := range map[string][]string{
+		"people":   {"call_me", "pronouns", "language", "tz", "role", "checkins", "quiet"},
+		"memories": {"source"},
+	} {
+		have := map[string]bool{}
+		rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+		if err != nil {
 			return err
 		}
-		have[name] = true
-	}
-	rows.Close()
-	for _, c := range []string{"call_me", "pronouns", "language", "tz", "role"} {
-		if have[c] {
-			continue
+		for rows.Next() {
+			var cid, notnull, pk int
+			var name, typ string
+			var dflt sql.NullString
+			if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+				rows.Close()
+				return err
+			}
+			have[name] = true
 		}
-		if _, err := db.Exec(`ALTER TABLE people ADD COLUMN ` + c + ` TEXT NOT NULL DEFAULT ''`); err != nil {
-			return err
+		rows.Close()
+		for _, c := range cols {
+			if !have[c] {
+				if _, err := db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + c + ` TEXT NOT NULL DEFAULT ''`); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
 }
 
-const personCols = `user_id,name,call_me,pronouns,language,tz,role,first_seen,last_seen`
+const personCols = `user_id,name,call_me,pronouns,language,tz,role,checkins,quiet,first_seen,last_seen`
 
 func scanPerson(r interface{ Scan(...any) error }) (Person, error) {
 	var p Person
-	err := r.Scan(&p.ID, &p.Name, &p.CallMe, &p.Pronouns, &p.Language, &p.TZ, &p.Role, &p.FirstSeen, &p.LastSeen)
+	err := r.Scan(&p.ID, &p.Name, &p.CallMe, &p.Pronouns, &p.Language, &p.TZ, &p.Role, &p.Checkins, &p.Quiet, &p.FirstSeen, &p.LastSeen)
 	return p, err
 }
 
@@ -207,8 +212,35 @@ func (s *Store) HasOwner(ctx context.Context) bool {
 	return n > 0
 }
 
+var quietRe = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$`)
+
+// WantsCheckins is false once they asked her to leave conversations to them.
+func (p Person) WantsCheckins() bool { return p.Checkins != "off" }
+
+// InQuietHours reports whether t falls inside their quiet window, in their
+// time zone when they gave one, otherwise the machine's.
+func (p Person) InQuietHours(t time.Time) bool {
+	if p.Quiet == "" {
+		return false
+	}
+	if p.TZ != "" {
+		if loc, err := time.LoadLocation(p.TZ); err == nil {
+			t = t.In(loc)
+		}
+	}
+	var h1, m1, h2, m2 int
+	if _, err := fmt.Sscanf(p.Quiet, "%d:%d-%d:%d", &h1, &m1, &h2, &m2); err != nil {
+		return false
+	}
+	cur, from, to := t.Hour()*60+t.Minute(), h1*60+m1, h2*60+m2
+	if from <= to {
+		return cur >= from && cur < to
+	}
+	return cur >= from || cur < to // the window crosses midnight
+}
+
 // Profile keys a person may set about themselves.
-var profileKeys = map[string]int{"call_me": 40, "pronouns": 30, "language": 30, "tz": 40}
+var profileKeys = map[string]int{"call_me": 40, "pronouns": 30, "language": 30, "tz": 40, "checkins": 3, "quiet": 11}
 
 // SetProfile changes what she knows about how to treat this person. Values
 // are pinned into her prompt, so they are single-line, short and free of
@@ -230,6 +262,16 @@ func (s *Store) SetProfile(ctx context.Context, id, key, value string) error {
 	if key == "tz" && value != "" {
 		if _, err := time.LoadLocation(value); err != nil {
 			return fmt.Errorf("%q is not a time zone name like Europe/Madrid", value)
+		}
+	}
+	switch key {
+	case "checkins":
+		if value != "" && value != "on" && value != "off" {
+			return errors.New("checkins is on or off")
+		}
+	case "quiet":
+		if value != "" && !quietRe.MatchString(value) {
+			return errors.New("quiet hours look like 23:00-08:00")
 		}
 	}
 	r, err := s.db.ExecContext(ctx, `UPDATE people SET `+key+`=? WHERE user_id=?`, value, id)
@@ -387,28 +429,35 @@ func mergePersons(ctx context.Context, tx *sql.Tx, src, dst string) error {
 		`UPDATE turns SET user_id=? WHERE user_id=?`,
 		`UPDATE reminders SET user_id=? WHERE user_id=?`,
 		`UPDATE OR IGNORE facts SET user_id=? WHERE user_id=?`,
+		`UPDATE threads SET person_id=? WHERE person_id=?`,
+		`UPDATE OR IGNORE bits SET person_id=? WHERE person_id=?`,
 	} {
 		if err := exec(q, dst, src); err != nil {
 			return err
 		}
 	}
-	if err := exec(`DELETE FROM facts WHERE user_id=?`, src); err != nil {
+	for _, q := range []string{`DELETE FROM facts WHERE user_id=?`} {
+		if err := exec(q, src); err != nil {
+			return err
+		}
+	}
+	if err := exec(`DELETE FROM bits WHERE person_id=?`, src); err != nil { // duplicates of dst's bits
 		return err
 	}
 
-	rows, err := tx.QueryContext(ctx, `SELECT persona,dynamic,familiarity,interactions,inside_jokes,last_seen FROM relationships WHERE user_id=?`, src)
+	rows, err := tx.QueryContext(ctx, `SELECT persona,dynamic,familiarity,interactions,last_seen FROM relationships WHERE user_id=?`, src)
 	if err != nil {
 		return err
 	}
 	type rel struct {
-		persona, dynamic, jokes, last string
-		fam                           float64
-		n                             int
+		persona, dynamic, last string
+		fam                    float64
+		n                      int
 	}
 	var rels []rel
 	for rows.Next() {
 		var r rel
-		if err := rows.Scan(&r.persona, &r.dynamic, &r.fam, &r.n, &r.jokes, &r.last); err != nil {
+		if err := rows.Scan(&r.persona, &r.dynamic, &r.fam, &r.n, &r.last); err != nil {
 			rows.Close()
 			return err
 		}
@@ -416,10 +465,10 @@ func mergePersons(ctx context.Context, tx *sql.Tx, src, dst string) error {
 	}
 	rows.Close()
 	for _, r := range rels {
-		var dyn, jokes string
+		var dyn string
 		var fam float64
 		var n int
-		err := tx.QueryRowContext(ctx, `SELECT dynamic,familiarity,interactions,inside_jokes FROM relationships WHERE user_id=? AND persona=?`, dst, r.persona).Scan(&dyn, &fam, &n, &jokes)
+		err := tx.QueryRowContext(ctx, `SELECT dynamic,familiarity,interactions FROM relationships WHERE user_id=? AND persona=?`, dst, r.persona).Scan(&dyn, &fam, &n)
 		if errors.Is(err, sql.ErrNoRows) {
 			if err := exec(`UPDATE relationships SET user_id=? WHERE user_id=? AND persona=?`, dst, src, r.persona); err != nil {
 				return err
@@ -435,8 +484,8 @@ func mergePersons(ctx context.Context, tx *sql.Tx, src, dst string) error {
 		if r.fam > fam {
 			fam = r.fam
 		}
-		if err := exec(`UPDATE relationships SET dynamic=?,familiarity=?,interactions=?,inside_jokes=?,last_seen=max(last_seen,?) WHERE user_id=? AND persona=?`,
-			dyn, fam, n+r.n, unionJokes(jokes, r.jokes), r.last, dst, r.persona); err != nil {
+		if err := exec(`UPDATE relationships SET dynamic=?,familiarity=?,interactions=?,last_seen=max(last_seen,?) WHERE user_id=? AND persona=?`,
+			dyn, fam, n+r.n, r.last, dst, r.persona); err != nil {
 			return err
 		}
 		if err := exec(`DELETE FROM relationships WHERE user_id=? AND persona=?`, src, r.persona); err != nil {
@@ -451,29 +500,11 @@ func mergePersons(ctx context.Context, tx *sql.Tx, src, dst string) error {
 		language=CASE WHEN language='' THEN (SELECT language FROM people WHERE user_id=?) ELSE language END,
 		tz=CASE WHEN tz='' THEN (SELECT tz FROM people WHERE user_id=?) ELSE tz END,
 		role=CASE WHEN role='' THEN (SELECT role FROM people WHERE user_id=?) ELSE role END,
+		checkins=CASE WHEN checkins='' OR (checkins='on' AND (SELECT checkins FROM people WHERE user_id=?)='off') THEN (SELECT checkins FROM people WHERE user_id=?) ELSE checkins END,
+		quiet=CASE WHEN quiet='' THEN (SELECT quiet FROM people WHERE user_id=?) ELSE quiet END,
 		first_seen=min(first_seen,(SELECT first_seen FROM people WHERE user_id=?))
-		WHERE user_id=?`, src, src, src, src, src, src, dst); err != nil {
+		WHERE user_id=?`, src, src, src, src, src, src, src, src, src, dst); err != nil {
 		return err
 	}
 	return exec(`DELETE FROM people WHERE user_id=?`, src)
-}
-
-func unionJokes(a, b string) string {
-	var x, y []string
-	_ = json.Unmarshal([]byte(a), &x)
-	_ = json.Unmarshal([]byte(b), &y)
-	seen := map[string]bool{}
-	var out []string
-	for _, j := range append(x, y...) {
-		k := strings.ToLower(j)
-		if !seen[k] {
-			seen[k] = true
-			out = append(out, j)
-		}
-	}
-	if len(out) > 8 {
-		out = out[len(out)-8:]
-	}
-	j, _ := json.Marshal(out)
-	return string(j)
 }

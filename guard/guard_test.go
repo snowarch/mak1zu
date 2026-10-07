@@ -13,6 +13,8 @@ func TestCleanStripsProtocolButKeepsProse(t *testing.T) {
 	}{
 		{"<think>hmm</think>ok sure", "ok sure", OK},
 		{"<recalled_memories>- x</recalled_memories>", "", Protocol},
+		{"<open_threads>- exam</open_threads>", "", Protocol},
+		{"<running_bits>- toaster</running_bits>", "", Protocol},
 		{"hi <recalled_memories>- x</recalled_memories>there", "hi there", OK},
 		{`{"tool": "web_search", "args": {}}`, "", Protocol},
 		{"i love the <b>bold</b> option, 1 < 2 and 3 > 2", "i love the <b>bold</b> option, 1 < 2 and 3 > 2", OK},

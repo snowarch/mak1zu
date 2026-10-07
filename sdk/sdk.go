@@ -94,6 +94,7 @@ type ToolSpec struct {
 // triggered the turn: tools must never leak one person's private memory to
 // another.
 type CallEnv struct {
+	Transport string // the platform this turn is on ("discord", "cli"): provenance for what she learns
 	Speaker   Identity
 	ChannelID string
 	GuildID   string

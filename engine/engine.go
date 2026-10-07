@@ -274,12 +274,13 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	name := per.Display() // the name they chose, else their platform name
 	var memText []string
 	for _, x := range mems {
-		memText = append(memText, x.Content)
+		memText = append(memText, describeMemory(x, e.Tr.Name(), time.Now()))
 	}
+	threads, bits := e.ledgerLines(ctx, pa.ID, per)
 
 	pctx := persona.Context{
 		Now: time.Now().Format("Monday 2 January 2006, 15:04 MST"), Platform: e.Tr.Name(),
-		Speaker: name, Relationship: rel.Describe(), Memories: memText,
+		Speaker: name, Relationship: rel.Describe(), Memories: memText, Threads: threads, Bits: bits,
 		LanguageHint: languageHint(cfg.Language),
 	}
 	if pa.Mood {
@@ -337,7 +338,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	var reactions []string
 	var links []string
 	env := &sdk.CallEnv{
-		Speaker: sdk.Identity{ID: per.ID, Name: name}, ChannelID: m.ChannelID, GuildID: m.GuildID, IsDM: m.IsDM, Persona: pa.ID,
+		Transport: e.Tr.Name(), Speaker: sdk.Identity{ID: per.ID, Name: name}, ChannelID: m.ChannelID, GuildID: m.GuildID, IsDM: m.IsDM, Persona: pa.ID,
 		QueueFile: func(f sdk.File) { queued = append(queued, f) },
 		React:     func(x string) { reactions = append(reactions, x) },
 		AttachLink: func(u string) {
@@ -466,6 +467,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	}
 	e.mu.Unlock()
 	_ = e.Mem.LogTurn(ctx, pa.ID, per.ID, m.ChannelID, m.Content, final)
+	_, _ = e.Mem.NoteBitUse(ctx, pa.ID, per.ID, final, time.Now())
 	for _, h := range hooks {
 		if h.AfterReply != nil {
 			h.AfterReply(ctx, m, final)

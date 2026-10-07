@@ -117,6 +117,12 @@ func (e *Engine) profileNotes(per memory.Person, rel memory.Relationship, m sdk.
 	if per.TZ != "" {
 		bits = append(bits, "time zone "+per.TZ)
 	}
+	if !per.WantsCheckins() {
+		bits = append(bits, "asked you not to start conversations")
+	}
+	if per.Quiet != "" {
+		bits = append(bits, "do not message them between "+per.Quiet)
+	}
 	if len(bits) > 0 {
 		out = append(out, "About "+per.Display()+": "+strings.Join(bits, ", ")+".")
 	}

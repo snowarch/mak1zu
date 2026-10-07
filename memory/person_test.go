@@ -122,9 +122,10 @@ func TestLinkMergesMemoryAndKeepsOtherPeoplePrivate(t *testing.T) {
 	s.SetFact(ctx, cli.ID, "editor", "helix")
 	s.Touch(ctx, "maki", d.ID, "Snow")
 	s.Touch(ctx, "maki", cli.ID, "snow")
-	s.AddInsideJoke(ctx, "maki", d.ID, "the toaster incident")
-	s.AddInsideJoke(ctx, "maki", cli.ID, "the toaster incident")
-	s.AddInsideJoke(ctx, "maki", cli.ID, "go vet")
+	s.AddBit(ctx, "maki", d.ID, "discord", "the toaster incident", "toaster")
+	s.AddBit(ctx, "maki", cli.ID, "cli", "the toaster incident", "toaster")
+	s.AddBit(ctx, "maki", cli.ID, "cli", "go vet is her love language", "go vet")
+	s.AddThread(ctx, cli.ID, "cli", "snow's exam is thursday", time.Time{})
 	s.AddReminder(ctx, cli.ID, "cli", "stretch", mustTime(t, "2030-01-01T00:00:00Z"))
 
 	code, _ := s.NewLinkCode(ctx, d.ID)
@@ -149,8 +150,14 @@ func TestLinkMergesMemoryAndKeepsOtherPeoplePrivate(t *testing.T) {
 		t.Fatalf("facts: target must win, gaps filled: %v", f)
 	}
 	rel, _ := s.Relationship(ctx, "maki", d.ID)
-	if rel.Interactions != 2 || len(rel.InsideJokes) != 2 {
+	if rel.Interactions != 2 {
 		t.Fatalf("relationship not merged: %+v", rel)
+	}
+	if bs, _ := s.Bits(ctx, "maki", d.ID); len(bs) != 2 {
+		t.Fatalf("bits not merged without duplicates: %+v", bs)
+	}
+	if th, _ := s.OpenThreads(ctx, d.ID, 10); len(th) != 1 {
+		t.Fatalf("thread did not follow the merge: %+v", th)
 	}
 	if _, ok, _ := s.Person(ctx, cli.ID); ok {
 		t.Fatal("the absorbed person still exists")

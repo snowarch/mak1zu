@@ -11,6 +11,7 @@ import (
 	"github.com/snowarch/mak1zu/persona"
 	"github.com/snowarch/mak1zu/provider"
 	"github.com/snowarch/mak1zu/sdk"
+	"github.com/snowarch/mak1zu/tools"
 )
 
 func (e *Engine) reminderLoop(ctx context.Context) {
@@ -77,24 +78,47 @@ func memoryCandidate(s string) bool {
 func (e *Engine) extractMemories(ctx context.Context, pa persona.Persona, m sdk.Message, per memory.Person) {
 	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 	defer cancel()
-	sys := `Extract durable personal facts the speaker states about THEMSELVES (preferences, projects, relationships, routines, things they own). Ignore jokes, opinions about others, anything uncertain. Each fact is one short sentence that starts with the speaker's name (given below), e.g. ["<name> likes Frieren"]. Reply with ONLY a JSON array of strings. Empty array if nothing durable.`
-	resp, err := e.LLM.Complete(ctx, provider.Request{System: sys, MaxTokens: 200, Messages: []provider.Message{{Role: provider.User, Content: "Speaker name: " + per.Display() + "\nMessage: " + m.Content}}})
+	sys := `Read what the speaker says about THEMSELVES. Reply with ONLY a JSON object: {"facts": [...], "threads": [...]}.
+"facts": durable personal facts (preferences, projects, relationships, routines, things they own). Each is one short sentence that starts with the speaker's name (given below), e.g. "<name> likes Frieren".
+"threads": things still in flight in their life that a friend would follow up on (an exam, a sick pet, a decision they are stuck on, a trip). Each is {"text": one short sentence starting with the name, "due": YYYY-MM-DD if a date is stated or clearly implied, else ""}. Today is ` + time.Now().Format("2006-01-02, Monday") + `.
+Ignore jokes, opinions about others, anything uncertain. Both arrays empty if nothing qualifies.`
+	resp, err := e.LLM.Complete(ctx, provider.Request{System: sys, MaxTokens: 300, Messages: []provider.Message{{Role: provider.User, Content: "Speaker name: " + per.Display() + "\nMessage: " + m.Content}}})
 	if err != nil {
 		return
 	}
-	txt := resp.Text
-	if i, j := strings.Index(txt, "["), strings.LastIndex(txt, "]"); i >= 0 && j > i {
-		txt = txt[i : j+1]
-	}
-	var facts []string
-	if json.Unmarshal([]byte(txt), &facts) != nil {
-		return
-	}
+	facts, threads := parseExtraction(resp.Text)
 	for _, f := range facts[:min(len(facts), 4)] {
 		if len([]rune(f)) >= 12 {
-			_, _ = e.Mem.Remember(ctx, pa.ID, memory.Semantic, per.ID, strings.TrimSpace(f), 0.55, "auto")
+			_, _ = e.Mem.RememberFrom(ctx, pa.ID, memory.Semantic, per.ID, e.Tr.Name(), strings.TrimSpace(f), 0.55, "auto")
 		}
 	}
+	for _, t := range threads[:min(len(threads), 2)] {
+		due, _ := tools.ParseDue(t.Due)
+		_, _ = e.Mem.AddThread(ctx, per.ID, e.Tr.Name(), t.Text, due)
+	}
+}
+
+type extractedThread struct {
+	Text string `json:"text"`
+	Due  string `json:"due"`
+}
+
+// parseExtraction reads the extractor's answer. It also accepts the older
+// bare array of facts, and survives prose around the JSON.
+func parseExtraction(txt string) (facts []string, threads []extractedThread) {
+	var obj struct {
+		Facts   []string          `json:"facts"`
+		Threads []extractedThread `json:"threads"`
+	}
+	if i, j := strings.Index(txt, "{"), strings.LastIndex(txt, "}"); i >= 0 && j > i {
+		if json.Unmarshal([]byte(txt[i:j+1]), &obj) == nil {
+			return obj.Facts, obj.Threads
+		}
+	}
+	if i, j := strings.Index(txt, "["), strings.LastIndex(txt, "]"); i >= 0 && j > i {
+		_ = json.Unmarshal([]byte(txt[i:j+1]), &facts)
+	}
+	return facts, nil
 }
 
 // Catchup answers what was said while she was offline: direct calls always,

@@ -52,11 +52,11 @@ func Builtins(d Deps) []sdk.Tool {
 				if !WorthKeeping(a.Content) {
 					return "not saved: too vague or too short to be useful", nil
 				}
-				id, err := d.Mem.Remember(ctx, d.Persona(), k, env.Speaker.ID, a.Content, 0.6, "")
+				id, err := d.Mem.RememberFrom(ctx, d.Persona(), k, env.Speaker.ID, env.Transport, a.Content, 0.6, "")
 				return fmt.Sprintf("saved #%d", id), err
 			}},
-		sdk.ToolFunc{S: sdk.ToolSpec{Name: "set_profile", Description: "Save how the person you are talking to wants to be treated: what to call them, their pronouns, language or time zone. Only what they told you about themselves, on every platform they use. An empty value clears it.",
-			Schema: Schema([]string{"field", "value"}, map[string][2]string{"field": {"string", "call_me, pronouns, language or tz"}, "value": {"string", "the value, e.g. Ren, they/them, Spanish, Europe/Madrid"}})},
+		sdk.ToolFunc{S: sdk.ToolSpec{Name: "set_profile", Description: "Save how the person you are talking to wants to be treated: what to call them, their pronouns, language, time zone, whether you may start conversations, quiet hours. Only what they told you about themselves, on every platform they use. An empty value clears it. If they ask you to stop checking in on them, set checkins off.",
+			Schema: Schema([]string{"field", "value"}, map[string][2]string{"field": {"string", "call_me, pronouns, language, tz, checkins (on/off: whether you may start conversations) or quiet (hours you must not message them, 23:00-08:00)"}, "value": {"string", "the value, e.g. Ren, they/them, Spanish, Europe/Madrid, off, 23:00-08:00"}})},
 			F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
 				a, err := args[struct{ Field, Value string }](raw)
 				if err != nil {
@@ -66,6 +66,44 @@ func Builtins(d Deps) []sdk.Tool {
 					return "not saved: " + err.Error(), nil
 				}
 				return "saved", nil
+			}},
+		sdk.ToolFunc{S: sdk.ToolSpec{Name: "open_thread", Description: "Note something still in flight in the person's life (an exam, a sick pet, a decision they are stuck on) so you can follow up later. Not for facts that are simply true.",
+			Schema: Schema([]string{"text"}, map[string][2]string{"text": {"string", "one short sentence"}, "due": {"string", "when it happens or is due, RFC3339 or YYYY-MM-DD, if known"}})},
+			F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
+				a, err := args[struct{ Text, Due string }](raw)
+				if err != nil {
+					return "", err
+				}
+				due, _ := ParseDue(a.Due)
+				id, err := d.Mem.AddThread(ctx, env.Speaker.ID, env.Transport, a.Text, due)
+				if err != nil {
+					return "", err
+				}
+				return fmt.Sprintf("thread #%d open", id), nil
+			}},
+		sdk.ToolFunc{S: sdk.ToolSpec{Name: "close_thread", Description: "Close a thread that is over (it happened, it resolved, they dropped it).",
+			Schema: Schema([]string{"id"}, map[string][2]string{"id": {"integer", "the thread number from <open_threads>"}})},
+			F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
+				a, err := args[struct{ ID int64 }](raw)
+				if err != nil {
+					return "", err
+				}
+				if ok, _ := d.Mem.CloseThread(ctx, env.Speaker.ID, a.ID); !ok {
+					return "no such open thread", nil
+				}
+				return "closed", nil
+			}},
+		sdk.ToolFunc{S: sdk.ToolSpec{Name: "note_bit", Description: "Save a running bit: a joke, nickname or reference only the two of you share, worth calling back to later. Be sparing; most conversations produce none.",
+			Schema: Schema([]string{"text", "trigger"}, map[string][2]string{"text": {"string", "what the bit is and where it came from, one sentence"}, "trigger": {"string", "a short word or phrase that will appear in your reply when you call it back"}})},
+			F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
+				a, err := args[struct{ Text, Trigger string }](raw)
+				if err != nil {
+					return "", err
+				}
+				if _, err := d.Mem.AddBit(ctx, d.Persona(), env.Speaker.ID, env.Transport, a.Text, a.Trigger); err != nil {
+					return "", err
+				}
+				return "noted", nil
 			}},
 		sdk.ToolFunc{S: sdk.ToolSpec{Name: "recall", Description: "Search your memories about the person you are talking to.",
 			Schema: Schema([]string{"query"}, map[string][2]string{"query": {"string", "what to look for"}})},
@@ -242,4 +280,21 @@ func searx(ctx context.Context, base, q string) (string, error) {
 		return "no results", nil
 	}
 	return out.String(), nil
+}
+
+// ParseDue reads a due date a model wrote: RFC3339 or a plain YYYY-MM-DD
+// (noon local, so a day never slips across a time zone). Empty is no date.
+func ParseDue(s string) (time.Time, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, nil
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	t, err := time.ParseInLocation("2006-01-02", s, time.Local)
+	if err != nil {
+		return time.Time{}, errors.New("due must be RFC3339 or YYYY-MM-DD")
+	}
+	return t.Add(12 * time.Hour), nil
 }
