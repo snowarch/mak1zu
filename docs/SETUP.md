@@ -68,6 +68,16 @@ The unit is sandboxed (`ProtectSystem=strict`, no new privileges) and can only w
 
 Docker: the `Dockerfile` builds a distroless image. Inside a container the panel has to listen on `0.0.0.0`, which requires `web_ui.token`; publish the port on `127.0.0.1` only.
 
+## Updating
+
+```bash
+git pull && make install
+mak1zu init --update --dry-run    # what changed in the shipped personas, rules and skills
+mak1zu init --update              # apply it; your own edits are never overwritten
+```
+
+The binary updates itself on `make install`, but your `.makizu/` folder is yours, so it only changes when you ask. Files you edited stay as they are; if this release changed the same file, the new version waits in `.makizu/.updates/` for you to compare (`diff -u`). New settings in `config.json` need nothing: missing keys take their defaults. Restart her after updating the binary; personas and rules reload on their own.
+
 ## When something is off
 
 | Symptom | Likely cause |

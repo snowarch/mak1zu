@@ -61,7 +61,7 @@ One thing worth knowing before you go looking: opencode Zen's *free* models only
   config.json  .env  data/     settings, secrets, memory (never commit these)
 ```
 
-Add a character by copying [docs/PERSONA_TEMPLATE.md](docs/PERSONA_TEMPLATE.md), then `mak1zu eval examples/eval-inputs.txt` and read what she says. Add a skill by creating a folder with a `SKILL.md`. Rules and skills outrank her moods but never her hard lines. [.makizu/README.md](.makizu/README.md) has the details.
+Keeping up with new releases is one command, `mak1zu init --update`, and it never overwrites your edits ([docs/SETUP.md](docs/SETUP.md#updating)). Add a character by copying [docs/PERSONA_TEMPLATE.md](docs/PERSONA_TEMPLATE.md), then `mak1zu eval examples/eval-inputs.txt` and read what she says. Add a skill by creating a folder with a `SKILL.md`. Rules and skills outrank her moods but never her hard lines. [.makizu/README.md](.makizu/README.md) has the details.
 
 ## Docs
 
