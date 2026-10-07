@@ -3,6 +3,28 @@
 <p align="center"><b>The companion you shape.</b><br>
 A Go engine for a Discord companion that remembers people, has a real personality, and runs from one static binary on any Linux distro.</p>
 
+## Set it up with your AI (two minutes)
+
+Most people already have a coding agent open (Claude Code, Codex, opencode, Cursor, Gemini CLI, anything that can run commands). Paste this into it:
+
+```text
+Set up Mak1zu for me. Clone https://github.com/snowarch/mak1zu, read its AGENTS.md and
+follow "Set it up for a person". Ask me only what you can't work out yourself, one question
+at a time. Never print my keys: tell me which file to put them in.
+```
+
+It installs her, asks which model should power her (there are free ones, no card), has you drop the key into a file, proves it with a real call, and lets you talk to her. Discord is one optional step after that. Your agent reads [AGENTS.md](AGENTS.md); the same file tells it how the code is laid out if you later ask it to change something.
+
+No agent that can run commands, only a chat window? Paste this instead and run what it tells you, one command at a time:
+
+```text
+Walk me through setting up Mak1zu (https://github.com/snowarch/mak1zu, README and
+docs/SETUP.md) one command at a time. I'll run each and paste the output back.
+Never ask me to paste an API key into this chat.
+```
+
+Prefer to do it yourself? [Quick start](#quick-start).
+
 ---
 
 Most chatbots sound like customer support wearing a costume. Mak1zu is built the other way round: a shared layer of rules for how people actually type in chat (short, opinionated, imperfect), a small Markdown file for who the character is, and a guard that strips the tells. The numbers behind those rules come from measuring thousands of real replies; they are in [docs/VOICE.md](docs/VOICE.md).
@@ -49,7 +71,7 @@ What she does not do: join voice channels, run commands or read files on the hos
 ## Quick start
 
 ```bash
-git clone https://github.com/snowarch/mak1zu && cd mak1zu
+git clone https://github.com/snowarch/mak1zu ~/src/mak1zu && cd ~/src/mak1zu
 make install         # builds and copies mak1zu to ~/.local/bin
 mkdir ~/mak1zu && cd ~/mak1zu
 mak1zu init          # pick a provider or paste your own URL, paste the key (hidden)
@@ -99,7 +121,7 @@ Keeping up with new releases is one command, `mak1zu init --update`, and it neve
 
 ## Docs
 
-[Setup](docs/SETUP.md) · [Providers](docs/PROVIDERS.md) · [Architecture](docs/ARCHITECTURE.md) · [SDK](docs/SDK.md) · [Voice study](docs/VOICE.md) · [Security](docs/SECURITY.md) · [Research](docs/RESEARCH.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Brand](brand/README.md)
+[Setup](docs/SETUP.md) · [Providers](docs/PROVIDERS.md) · [Architecture](docs/ARCHITECTURE.md) · [SDK](docs/SDK.md) · [Voice study](docs/VOICE.md) · [Security](docs/SECURITY.md) · [Research](docs/RESEARCH.md) · [Changelog](CHANGELOG.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [For agents](AGENTS.md) · [Brand](brand/README.md)
 
 ## Develop
 

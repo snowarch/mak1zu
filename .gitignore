@@ -10,3 +10,4 @@ config.json
 *.db-wal
 *.db-shm
 __pycache__/
+CLAUDE.local.md
