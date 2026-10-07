@@ -124,6 +124,9 @@ func TestExportThenInstallRoundTripsAndNeverOverwritesBlindly(t *testing.T) {
 	if p.ID != "rin" || p.Voice == "" || len(p.Skills) != 1 || len(p.Rules) != 1 {
 		t.Fatalf("%+v", p)
 	}
+	if s := p.Summary(); !strings.Contains(s, "You are Rin") || strings.Contains(s, `rule "20-calm": ---`) {
+		t.Fatalf("the summary should show how the character starts, and describe rules by their first real line:\n%s", s)
+	}
 	if !strings.Contains(p.Summary(), "will follow") {
 		t.Fatal("the summary must say this is text she obeys")
 	}

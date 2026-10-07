@@ -57,19 +57,44 @@ func (p *Pack) Summary() string {
 	for _, n := range sortedKeys(p.Rules) {
 		fmt.Fprintf(&b, "house rule %q: %s\n", n, firstLine(p.Rules[n]))
 	}
-	b.WriteString("All of this is text she will follow. Read it before you accept: " + p.Root)
+	b.WriteString("\nThe character starts like this:\n" + preview(p.Persona, 8) + "\n")
+	b.WriteString("\nAll of this is text she will follow. Unpack the archive or give a folder to read every line before you accept.")
 	return b.String()
 }
 
+// firstLine is the first line that says something: not a front matter fence.
 func firstLine(s string) string {
-	s = strings.TrimSpace(s)
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		s = s[:i]
+	for _, l := range strings.Split(s, "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" || l == "---" {
+			continue
+		}
+		l = strings.TrimPrefix(l, "description:")
+		l = strings.TrimSpace(l)
+		if len(l) > 100 {
+			l = l[:100] + "…"
+		}
+		return l
 	}
-	if len(s) > 100 {
-		s = s[:100] + "…"
+	return ""
+}
+
+// preview is the first few lines of a text, for reading before accepting it.
+func preview(s string, n int) string {
+	var out []string
+	for _, l := range strings.Split(s, "\n") {
+		if strings.TrimSpace(l) == "" || strings.TrimSpace(l) == "---" {
+			continue
+		}
+		if len(l) > 110 {
+			l = l[:110] + "…"
+		}
+		out = append(out, "    "+l)
+		if len(out) == n {
+			break
+		}
 	}
-	return s
+	return strings.Join(out, "\n")
 }
 
 func sortedKeys(m map[string]string) []string {
