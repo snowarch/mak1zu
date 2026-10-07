@@ -7,4 +7,5 @@
 5. Never add a tool that reads files or runs commands from chat.
 6. Don't commit `.env`, `config.json`, `data/`, or voice exports.
 7. Commit messages: short, lowercase, one line, what changed (`fix null required in tool schemas`).
-8. Provider presets (`provider/presets.go`) only carry model ids you have checked against that provider's own `/models` list or docs. Say how you checked in the commit or PR, and update [docs/PROVIDERS.md](docs/PROVIDERS.md).
+8. A change someone can see gets one short line in [CHANGELOG.md](CHANGELOG.md) under Unreleased, in the same commit.
+9. Provider presets (`provider/presets.go`) only carry model ids you have checked against that provider's own `/models` list or docs. Say how you checked in the commit or PR, and update [docs/PROVIDERS.md](docs/PROVIDERS.md).

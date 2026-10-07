@@ -1,21 +1,23 @@
-name: Bug
-description: Something she does wrong, or something that fails to start
-labels: [bug]
+name: Something is broken
+description: She misbehaves, setup fails, a command errors.
 body:
   - type: textarea
     id: what
     attributes:
       label: What happened, and what did you expect?
-      description: For a bad reply, paste the message and her answer. For a failure, paste the exact error.
-    validations: { required: true }
+    validations:
+      required: true
   - type: textarea
     id: doctor
     attributes:
       label: Output of `mak1zu doctor`
-      description: It never prints keys. Remove anything else you consider private.
+      description: Keys and tokens are never printed by it, but look before you paste.
       render: text
   - type: input
     id: version
     attributes:
-      label: "`mak1zu version` and provider/model"
-      placeholder: "0.1.0, opencode-go / deepseek-v4-flash"
+      label: Version (`mak1zu version`) and distro
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
