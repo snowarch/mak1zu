@@ -27,8 +27,10 @@ on every panel control, packaging.
 2. **Provider presets stay true.** Models are retired every few months. A
    scheduled check that every preset's model still appears in its provider's
    model list.
-3. **Companion mode (opt-in):** proactive check-ins with hard rate limits, quiet
-   hours and an easy "stop" the persona honors.
+3. **Companion mode, delivery half (opt-in):** the night shift already decides what she
+   would like to say and she raises it in the next private chat; what is missing is her
+   starting the conversation, on the transport you were last on, honouring the
+   per-person `checkins` and `quiet` boundaries that already exist.
 4. **Weeb toolbox, rest:** wallpapers, "what should I watch" from someone's AniList.
 5. **Embeddings:** an optional local embedder behind `memory.Embedder`.
 6. **Eval corpus:** grow `examples/eval-inputs.txt` and add a repetition and

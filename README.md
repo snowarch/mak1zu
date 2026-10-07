@@ -12,12 +12,13 @@ The default character is **Maki**: flat and dry on the surface, shy underneath. 
 ## What you get
 
 - **Servers and DMs, with house rules per room.** Home channels where she talks freely, mention-only channels where only a real `@mention` wakes her, owner-only DMs.
-- **Memory that stays with the person.** SQLite with full-text search: what you told her, how she relates to you, inside jokes, reminders, `forget me`. One person's memory never reaches another person's prompt; a test proves it.
+- **Memory that stays with the person.** SQLite with full-text search: what you told her and where, what is still open in your life (an exam, a sick cat), running jokes that rest between callbacks, what to call you, reminders, `forget me`. You are one person across Discord and the terminal (`/link`), and `/memories` shows everything she holds. One person's memory never reaches another person's prompt; a test proves it.
+- **A night shift (opt-in).** Once a day she goes over her conversations with the people she actually talked to, tidies what she knows, writes a short private diary entry you can read with `/diary`, and decides what she would like to bring up next time. A few model calls a night, capped, off until you turn it on; try it with `mak1zu night --dry-run`.
 - **Any model.** Thirteen presets, or paste the address of anything that speaks the OpenAI API (vLLM, llama.cpp, LiteLLM, Together, a company gateway). Ordered fallbacks, a circuit breaker, vision routing, and `init` makes a real call to prove it works before it finishes: [docs/PROVIDERS.md](docs/PROVIDERS.md).
 - **A web panel** on `127.0.0.1:8787`: live feed of what she heard and why she stayed quiet, models, rooms, dials, her personality file. Changes apply instantly; keys are write-only.
 - **A guard on every reply.** No leaked prompts, no tool protocol, no `*stares*` ten times in a row, no "I'd be happy to help". A reply that promises an attachment and has none is caught.
 - **Extensible.** Tools and hooks in about 20 lines of Go, any [MCP](https://modelcontextprotocol.io) server as a tool source, transports in five methods, personalities in Markdown. [docs/SDK.md](docs/SDK.md)
-- **Slash commands:** `/persona` (owner), `/callme`, `/link`, `/mood`, `/remember`, `/memories`, `/forget`, `/ping`.
+- **Slash commands:** `/persona` (owner), `/callme`, `/link`, `/diary`, `/mood`, `/remember`, `/memories`, `/forget`, `/ping`.
 
 ## What she can do
 

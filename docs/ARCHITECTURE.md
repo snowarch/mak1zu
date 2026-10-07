@@ -33,7 +33,7 @@ thinks with) and **Plugin** (what she can do). Everything else is replaceable.
 | `home` | The `.makizu/` folder: house rules, per-server and per-channel notes, skills. Validated names, symlink-proof reads, size caps, hot reload. | Personas (see `persona`). |
 | `persona` | Character files (Markdown + front matter), shared `substrate.md`, prompt composition, mood. | Routing, memory. |
 | `provider` | OpenAI-compatible `chat` and `responses` protocols, error taxonomy, router, circuit breaker. | Personas, Discord, memory. |
-| `memory` | SQLite (pure Go) + FTS5: memories, people and their platform accounts (profile: chosen name, pronouns, language, time zone, owner role), link codes, per-character relationships, facts, turns, reminders. Optional embedder rerank. | Deciding what is worth remembering (engine/tools do). |
+| `memory` | SQLite (pure Go) + FTS5: memories (with the transport they were learned on), people and their platform accounts (profile: chosen name, pronouns, language, time zone, owner role, check-in and quiet-hour boundaries), link codes, the ledger (open threads, running bits with a cooldown), the night shift's diary and unsaid queue, per-character relationships, facts, turns, reminders. Optional embedder rerank. | Deciding what is worth remembering (engine/tools do). |
 | `guard` | The one public-text boundary: protocol/leak stripping, tic detection, loop detection, emoji budget, safe splitting. | Voice. |
 | `engine` | Policy, turn pipeline, incidents, promise audit, reminders, maintenance. | Platform and provider details. |
 | `tools` | Registry, SSRF-safe fetch, built-in tools (remember, recall, forget_me, set_reminder, react, read_url, web_search, wallpaper, image_search, reaction_gif, write_file, anime_search, anime_airing, read_skill, review_myself, now). | Anything that reads the host filesystem. |
@@ -41,6 +41,14 @@ thinks with) and **Plugin** (what she can do). Everything else is replaceable.
 | `panel` | Embedded web UI, JSON API, CSRF/rebinding guards. | Persisting anything but config and persona files. |
 | `transport/discord` | discordgo ⇄ `sdk.Transport`, emoji resolution at send time, mention neutralisation. | Whether to answer. |
 | `transport/cli` | Terminal chat for persona and plugin development. | |
+
+## Every turn has a budget
+
+`engine/budget_test.go` fails when the tool definitions sent on every turn
+(7.6 KB, about 1.9k tokens) or persona + shared substrate (12.2 KB) outgrow their
+ceiling. A new tool or a longer persona has to make room, or raise the number in
+a diff someone reads. Private things (open threads, what she has been meaning to
+bring up) are only put in front of her in a private conversation.
 
 ## Invariants (each has a test)
 
