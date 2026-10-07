@@ -176,8 +176,8 @@ func Default() Config {
 			Temperature: 0.9,
 			Routing:     Routing{Text: []string{"main"}, Vision: []string{"main"}},
 			Providers: map[string]Provider{
-				"main": {Enabled: true, BaseURL: "https://api.openai.com/v1", Model: "gpt-4.1-mini",
-					Protocol: "chat", APIKeyEnv: "MAK1ZU_API_KEY", TimeoutSeconds: 60, CooldownSeconds: 30, Vision: true},
+				"main": {Enabled: true, BaseURL: "https://api.openai.com/v1", Model: "gpt-5.4-mini",
+					Protocol: "chat", APIKeyEnv: "MAK1ZU_API_KEY", TimeoutSeconds: 60, CooldownSeconds: 30, Vision: true, ReasoningRoom: 1000},
 			},
 		},
 		Behavior: Behavior{

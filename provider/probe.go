@@ -74,6 +74,10 @@ func explain(err error, c config.Provider) Diagnosis {
 		return Diagnosis{Problem: "no answer from " + host + " in time", Fix: "check your connection or raise timeout_seconds (local models can be slow to load)"}
 	case pe.Status == 403 && (strings.Contains(low, "1010") || strings.Contains(low, "cloudflare") || strings.Contains(low, "error code")):
 		return Diagnosis{Problem: host + " blocked the request before it reached the API (bot protection)", Fix: "a VPN or datacenter IP is the usual cause; set a custom User-Agent in the provider headers if it persists"}
+	case strings.Contains(low, "free tier can only be used from within"):
+		return Diagnosis{Problem: "model " + c.Model + " is a free-tier model that only works inside the app that hosts it, not through the API", Fix: "pick a model that is open to API clients (for opencode, the Go list or a paid Zen model) or another preset; docs/PROVIDERS.md says which is which"}
+	case pe.Status == 410 || strings.Contains(low, "deprecated") || strings.Contains(low, "retired"):
+		return Diagnosis{Problem: "model " + c.Model + " has been retired by " + host + " (" + pe.Msg + ")", Fix: "switch to a current model; the suggestions below come from the provider's own list"}
 	case pe.Kind == KindAuth:
 		return Diagnosis{Problem: host + " rejected the key (" + itoa(pe.Status) + ")", Fix: "the key is wrong, expired, or has no access to model " + c.Model}
 	case pe.Kind == KindRateLimit:

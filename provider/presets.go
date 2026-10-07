@@ -21,23 +21,28 @@ type Preset struct {
 	Model    string
 	KeyEnv   string // env var the key is read from; "" for local servers
 	KeyURL   string // where a human gets a key
+	Cost     string // what using it costs, in a few words
 	Vision   bool
 	Headroom int // extra completion tokens for thinking models
 	Note     string
 }
 
-// Presets are ordered for display: hosted first, local last.
+// Presets are ordered for display: ways to start for free first, then paid
+// hosts, local servers last. docs/PROVIDERS.md walks through each one.
 var Presets = []Preset{
-	{ID: "openai", Label: "OpenAI", BaseURL: "https://api.openai.com/v1", Protocol: "chat", Model: "gpt-4.1-mini", KeyEnv: "OPENAI_API_KEY", KeyURL: "https://platform.openai.com/api-keys", Vision: true},
-	{ID: "anthropic", Label: "Anthropic (Claude)", BaseURL: "https://api.anthropic.com/v1", Protocol: "chat", Model: "claude-haiku-4-5-20251001", KeyEnv: "ANTHROPIC_API_KEY", KeyURL: "https://console.anthropic.com/settings/keys", Vision: true},
-	{ID: "gemini", Label: "Google Gemini", BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai", Protocol: "chat", Model: "gemini-2.5-flash", KeyEnv: "GEMINI_API_KEY", KeyURL: "https://aistudio.google.com/apikey", Vision: true},
-	{ID: "openrouter", Label: "OpenRouter (any model)", BaseURL: "https://openrouter.ai/api/v1", Protocol: "chat", Model: "openai/gpt-4.1-mini", KeyEnv: "OPENROUTER_API_KEY", KeyURL: "https://openrouter.ai/keys", Vision: true},
-	{ID: "groq", Label: "Groq", BaseURL: "https://api.groq.com/openai/v1", Protocol: "chat", Model: "llama-3.3-70b-versatile", KeyEnv: "GROQ_API_KEY", KeyURL: "https://console.groq.com/keys"},
-	{ID: "deepseek", Label: "DeepSeek", BaseURL: "https://api.deepseek.com/v1", Protocol: "chat", Model: "deepseek-chat", KeyEnv: "DEEPSEEK_API_KEY", KeyURL: "https://platform.deepseek.com/api_keys"},
-	{ID: "mistral", Label: "Mistral", BaseURL: "https://api.mistral.ai/v1", Protocol: "chat", Model: "mistral-small-latest", KeyEnv: "MISTRAL_API_KEY", KeyURL: "https://console.mistral.ai/api-keys"},
-	{ID: "opencode-go", Label: "opencode Go", BaseURL: "https://opencode.ai/zen/go/v1", Protocol: "chat", Model: "deepseek-v4-flash", Headroom: 1200, KeyEnv: "OPENCODE_API_KEY", KeyURL: "https://opencode.ai", Note: "a few models here only speak the responses protocol: switch protocol for those"},
-	{ID: "ollama", Label: "Ollama (local, no key)", BaseURL: "http://localhost:11434/v1", Protocol: "chat", Model: "llama3.2", Note: "run `ollama pull llama3.2` first; any model you have pulled works"},
-	{ID: "lmstudio", Label: "LM Studio (local, no key)", BaseURL: "http://localhost:1234/v1", Protocol: "chat", Model: "local-model", Note: "start the local server in LM Studio and use the model id it shows"},
+	{ID: "openrouter-free", Label: "OpenRouter (free models)", BaseURL: "https://openrouter.ai/api/v1", Protocol: "chat", Model: "openrouter/free", KeyEnv: "OPENROUTER_API_KEY", KeyURL: "https://openrouter.ai/keys", Cost: "free, rate-limited", Note: "picks any free model that fits the request; about 20 requests a minute plus a daily cap; free endpoints may train on your prompts (see your OpenRouter privacy settings)"},
+	{ID: "cline", Label: "Cline", BaseURL: "https://api.cline.bot/api/v1", Protocol: "chat", Model: "google/gemma-4-31b-it:free", KeyEnv: "CLINE_API_KEY", KeyURL: "https://app.cline.bot", Vision: true, Cost: "free promos, then pay as you go", Note: "the free models rotate; GET /models lists every id, and the ones ending in :free cost nothing"},
+	{ID: "opencode-go", Label: "opencode Go", BaseURL: "https://opencode.ai/zen/go/v1", Protocol: "chat", Model: "deepseek-v4-flash", Headroom: 1200, KeyEnv: "OPENCODE_API_KEY", KeyURL: "https://opencode.ai", Cost: "subscription", Note: "works from any client; a few models only speak the responses protocol: switch protocol for those"},
+	{ID: "opencode-zen", Label: "opencode Zen (paid)", BaseURL: "https://opencode.ai/zen/v1", Protocol: "chat", Model: "deepseek-v4-flash", Headroom: 1200, KeyEnv: "OPENCODE_API_KEY", KeyURL: "https://opencode.ai", Cost: "pay as you go", Note: "needs credits; the models marked free there only work inside the OpenCode app and answer 403 here"},
+	{ID: "openrouter", Label: "OpenRouter (any model)", BaseURL: "https://openrouter.ai/api/v1", Protocol: "chat", Model: "google/gemini-3.5-flash", KeyEnv: "OPENROUTER_API_KEY", KeyURL: "https://openrouter.ai/keys", Vision: true, Headroom: 1000, Cost: "pay as you go"},
+	{ID: "gemini", Label: "Google Gemini", BaseURL: "https://generativelanguage.googleapis.com/v1beta/openai", Protocol: "chat", Model: "gemini-3.5-flash", KeyEnv: "GEMINI_API_KEY", KeyURL: "https://aistudio.google.com/apikey", Vision: true, Headroom: 1000, Cost: "free tier or pay as you go"},
+	{ID: "groq", Label: "Groq", BaseURL: "https://api.groq.com/openai/v1", Protocol: "chat", Model: "llama-3.3-70b-versatile", KeyEnv: "GROQ_API_KEY", KeyURL: "https://console.groq.com/keys", Cost: "free tier or pay as you go"},
+	{ID: "deepseek", Label: "DeepSeek", BaseURL: "https://api.deepseek.com", Protocol: "chat", Model: "deepseek-v4-flash", KeyEnv: "DEEPSEEK_API_KEY", KeyURL: "https://platform.deepseek.com/api_keys", Headroom: 1000, Cost: "pay as you go"},
+	{ID: "mistral", Label: "Mistral", BaseURL: "https://api.mistral.ai/v1", Protocol: "chat", Model: "mistral-small-latest", KeyEnv: "MISTRAL_API_KEY", KeyURL: "https://console.mistral.ai/api-keys", Cost: "free tier or pay as you go"},
+	{ID: "openai", Label: "OpenAI", BaseURL: "https://api.openai.com/v1", Protocol: "chat", Model: "gpt-5.4-mini", KeyEnv: "OPENAI_API_KEY", KeyURL: "https://platform.openai.com/api-keys", Vision: true, Headroom: 1000, Cost: "pay as you go"},
+	{ID: "anthropic", Label: "Anthropic (Claude)", BaseURL: "https://api.anthropic.com/v1", Protocol: "chat", Model: "claude-haiku-4-5-20251001", KeyEnv: "ANTHROPIC_API_KEY", KeyURL: "https://console.anthropic.com/settings/keys", Vision: true, Cost: "pay as you go"},
+	{ID: "ollama", Label: "Ollama (local)", BaseURL: "http://localhost:11434/v1", Protocol: "chat", Model: "llama3.2", Cost: "free, runs on your machine", Note: "run `ollama pull llama3.2` first; any model you have pulled works"},
+	{ID: "lmstudio", Label: "LM Studio (local)", BaseURL: "http://localhost:1234/v1", Protocol: "chat", Model: "local-model", Cost: "free, runs on your machine", Note: "start the local server in LM Studio and use the model id it shows"},
 }
 
 // PresetByID finds a preset, case-insensitively.

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/snowarch/mak1zu/config"
@@ -37,6 +38,10 @@ func CleanText(s string) string {
 	if i := strings.Index(s, "</think>"); i >= 0 {
 		s = s[i+len("</think>"):]
 	}
+	// a reply cut off mid-thought has an opening tag and nothing after it
+	if i := strings.Index(s, "<think>"); i >= 0 {
+		s = s[:i]
+	}
 	return strings.TrimSpace(s)
 }
 
@@ -45,54 +50,130 @@ func (h *HTTP) Complete(ctx context.Context, r Request) (Response, error) {
 	if r.HasImages() && !h.Cfg.Vision {
 		return Response{}, &Error{Kind: KindUnsupported, Provider: h.Name, Msg: "provider has no vision"}
 	}
-	var body map[string]any
-	var path string
+	path := "/chat/completions"
 	if h.Cfg.Protocol == "responses" {
-		path, body = "/responses", h.responsesBody(r)
-	} else {
-		path, body = "/chat/completions", h.chatBody(r)
+		path = "/responses"
 	}
-	for k, v := range h.Cfg.ExtraBody {
-		body[k] = v
-	}
-	raw, _ := json.Marshal(body)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(h.Cfg.BaseURL, "/")+path, bytes.NewReader(raw))
-	if err != nil {
-		return Response{}, &Error{Kind: KindBadRequest, Provider: h.Name, Msg: err.Error()}
-	}
-	h.decorate(req)
-	resp, err := h.HC.Do(req)
-	if err != nil {
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return Response{}, &Error{Kind: KindCanceled, Provider: h.Name, Msg: "canceled"}
+	var data []byte
+	var status int
+	// retry only while the provider keeps telling us a new parameter it dislikes
+	for attempt := 0; ; attempt++ {
+		var err *Error
+		status, data, err = h.post(ctx, path, h.body(path, r))
+		if err != nil {
+			return Response{}, err
 		}
-		k := KindServer
-		var ne interface{ Timeout() bool }
-		if errors.As(err, &ne) && ne.Timeout() || errors.Is(err, context.DeadlineExceeded) {
-			k = KindTimeout
+		if status < 300 {
+			break
 		}
-		return Response{}, &Error{Kind: k, Provider: h.Name, Msg: scrub(err.Error(), h.Cfg.Key())}
-	}
-	defer resp.Body.Close()
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if resp.StatusCode >= 300 {
-		return Response{}, &Error{Kind: classify(resp.StatusCode, data), Provider: h.Name, Status: resp.StatusCode, Msg: scrub(snippet(data), h.Cfg.Key())}
+		if attempt < 2 && status == http.StatusBadRequest && h.learn(data) {
+			continue
+		}
+		return Response{}, &Error{Kind: classify(status, data), Provider: h.Name, Status: status, Msg: scrub(snippet(data), h.Cfg.Key())}
 	}
 	var out Response
+	var err error
 	if h.Cfg.Protocol == "responses" {
 		out, err = parseResponses(data)
 	} else {
 		out, err = parseChat(data)
 	}
 	if err != nil {
-		return Response{}, &Error{Kind: KindServer, Provider: h.Name, Status: resp.StatusCode, Msg: "malformed response: " + err.Error()}
+		return Response{}, &Error{Kind: KindServer, Provider: h.Name, Status: status, Msg: "malformed response: " + err.Error()}
 	}
 	out.Text = CleanText(out.Text)
 	if out.Text == "" && len(out.ToolCalls) == 0 {
-		return Response{}, &Error{Kind: KindEmpty, Provider: h.Name, Status: resp.StatusCode, Msg: "empty completion (raise reasoning_headroom for thinking models)"}
+		return Response{}, &Error{Kind: KindEmpty, Provider: h.Name, Status: status, Msg: "empty completion (raise reasoning_headroom for thinking models)"}
 	}
 	out.Provider, out.Model, out.Latency = h.Name, h.Cfg.Model, time.Since(start)
 	return out, nil
+}
+
+// body builds the request for the protocol, adapted to what this endpoint and
+// model have already refused, then the user's extra_body on top.
+func (h *HTTP) body(path string, r Request) map[string]any {
+	var b map[string]any
+	if path == "/responses" {
+		b = h.responsesBody(r)
+	} else {
+		b = h.chatBody(r)
+	}
+	q := h.learned()
+	if q&quirkCompletionTokens != 0 {
+		if n, ok := b["max_tokens"]; ok {
+			delete(b, "max_tokens")
+			b["max_completion_tokens"] = n
+		}
+	}
+	if q&quirkNoTemperature != 0 {
+		delete(b, "temperature")
+	}
+	for k, v := range h.Cfg.ExtraBody {
+		b[k] = v
+	}
+	return b
+}
+
+// post sends one request. A returned *Error is a transport failure; HTTP
+// statuses come back as (status, body).
+func (h *HTTP) post(ctx context.Context, path string, body map[string]any) (int, []byte, *Error) {
+	raw, _ := json.Marshal(body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(h.Cfg.BaseURL, "/")+path, bytes.NewReader(raw))
+	if err != nil {
+		return 0, nil, &Error{Kind: KindBadRequest, Provider: h.Name, Msg: err.Error()}
+	}
+	h.decorate(req)
+	resp, err := h.HC.Do(req)
+	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return 0, nil, &Error{Kind: KindCanceled, Provider: h.Name, Msg: "canceled"}
+		}
+		k := KindServer
+		var ne interface{ Timeout() bool }
+		if errors.As(err, &ne) && ne.Timeout() || errors.Is(err, context.DeadlineExceeded) {
+			k = KindTimeout
+		}
+		return 0, nil, &Error{Kind: k, Provider: h.Name, Msg: scrub(err.Error(), h.Cfg.Key())}
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	return resp.StatusCode, data, nil
+}
+
+// Parameter quirks a provider taught us by refusing a request. OpenAI's newer
+// models reject max_tokens and any temperature but their default; there is no
+// list to ship that would stay true, so the client reads the refusal once and
+// remembers it for the life of the process.
+const (
+	quirkCompletionTokens = 1 << iota // wants max_completion_tokens, not max_tokens
+	quirkNoTemperature                // only accepts its default temperature
+)
+
+var learnedQuirks sync.Map // "base_url|model" -> int
+
+func (h *HTTP) quirkKey() string { return h.Cfg.BaseURL + "|" + h.Cfg.Model }
+
+func (h *HTTP) learned() int {
+	v, _ := learnedQuirks.Load(h.quirkKey())
+	q, _ := v.(int)
+	return q
+}
+
+// learn reads a 400 body and reports whether it taught us something new.
+func (h *HTTP) learn(body []byte) bool {
+	low := strings.ToLower(string(body))
+	have, add := h.learned(), 0
+	if strings.Contains(low, "max_completion_tokens") {
+		add |= quirkCompletionTokens
+	}
+	if strings.Contains(low, "temperature") {
+		add |= quirkNoTemperature
+	}
+	if add&^have == 0 {
+		return false
+	}
+	learnedQuirks.Store(h.quirkKey(), have|add)
+	return true
 }
 
 // decorate sets the headers every request carries: content type, key, an honest
@@ -119,7 +200,7 @@ func classify(status int, body []byte) Kind {
 		return KindRateLimit
 	case status == 404 && strings.Contains(strings.ToLower(string(body)), "model"):
 		return KindBadRequest
-	case status == 400 || status == 404 || status == 422:
+	case status == 400 || status == 404 || status == 410 || status == 422:
 		return KindBadRequest
 	case status == 408 || status == 504:
 		return KindTimeout

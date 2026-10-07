@@ -318,7 +318,8 @@ views.models=()=>{
     let name=p.ID,i=2;while(S.config.llm.providers[name])name=p.ID+'-'+i++;
     try{await api('POST','/api/provider/add',{preset:p.ID,name});await refreshState();toast(p.KeyEnv?'Added '+name+'. Put '+p.KeyEnv+' in .makizu/.env, then Test.':'Added '+name+'. Make sure it is running, then Test.');go('models')}catch(e){toast(e.message,1)}}},
     h('b',{},p.Label),h('span',{class:'mono'},p.Model),
-    h('span',{class:'mut',style:'font-size:12px'},p.KeyEnv?(p.key_found?p.KeyEnv+' found in your environment':'needs '+p.KeyEnv):'local, no key')));
+    h('span',{style:'font-size:12px'},p.Cost),
+    h('span',{class:'mut',style:'font-size:12px'},p.KeyEnv?(p.key_found?p.KeyEnv+' found in your environment':'needs '+p.KeyEnv):'no key needed')));
   return [h('p',{class:'lead'},'Providers are the services that actually think. Add one, give it a key, press Test. If something is wrong the test says what, in words.'),
     ...Object.keys(S.config.llm.providers).map(providerCard),
     h('div',{class:'card'},h('h3',{},'Order of preference'),routeEditor('text','Chat'),routeEditor('vision','Images')),

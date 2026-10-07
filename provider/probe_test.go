@@ -66,6 +66,8 @@ func TestProbeExplainsFailures(t *testing.T) {
 		{"cloudflare", 403, "error code: 1010", "bot protection"},
 		{"quota", 429, `{"error":"slow down"}`, "quota"},
 		{"session", 400, `{"error":{"type":"MissingSessionID","message":"missing x-opencode-session"}}`, "session header"},
+		{"free tier", 403, `{"type":"error","error":{"type":"FreeTierError","message":"OpenCode's free tier can only be used from within OpenCode"}}`, "free-tier"},
+		{"retired", 410, `{"error":{"message":"Model old-1 has been deprecated. Use new-1 instead."}}`, "retired"},
 		{"wrong path", 404, `<html>not found</html>`, "not found"},
 	}
 	for _, tc := range cases {
@@ -135,7 +137,7 @@ func TestQuirkHeaders(t *testing.T) {
 func TestPresetsAreComplete(t *testing.T) {
 	seen := map[string]bool{}
 	for _, p := range Presets {
-		if p.ID == "" || p.BaseURL == "" || p.Model == "" || (p.Protocol != "chat" && p.Protocol != "responses") {
+		if p.ID == "" || p.BaseURL == "" || p.Model == "" || p.Cost == "" || (p.Protocol != "chat" && p.Protocol != "responses") {
 			t.Errorf("incomplete preset %+v", p)
 		}
 		if seen[p.ID] {

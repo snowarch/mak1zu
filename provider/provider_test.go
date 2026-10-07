@@ -132,3 +132,62 @@ func TestRouterTriesLoneOpenProviderAnyway(t *testing.T) {
 		t.Fatalf("a lone provider must not be locked out by its own cooldown: %v %v", resp, err)
 	}
 }
+
+func TestLearnsCompletionTokensAndTemperatureFromARefusal(t *testing.T) {
+	var calls int
+	s := srv(t, func(_ string, b map[string]any) (int, string) {
+		calls++
+		_, oldCap := b["max_tokens"]
+		_, hasTemp := b["temperature"]
+		switch {
+		case oldCap:
+			return 400, `{"error":{"message":"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead."}}`
+		case hasTemp:
+			return 400, `{"error":{"message":"Unsupported value: 'temperature' does not support 0.9 with this model. Only the default (1) value is supported."}}`
+		}
+		if b["max_completion_tokens"] == nil {
+			t.Errorf("lost the token cap: %v", b)
+		}
+		return 200, `{"choices":[{"message":{"content":"fine"}}]}`
+	})
+	defer s.Close()
+	temp := 0.9
+	cfg := config.Provider{Enabled: true, BaseURL: s.URL, Model: "learns-1"}
+	req := Request{Temperature: &temp, Messages: []Message{{Role: User, Content: "hi"}}}
+	r, err := NewHTTP("a", cfg).Complete(context.Background(), req)
+	if err != nil || r.Text != "fine" {
+		t.Fatalf("%+v %v", r, err)
+	}
+	first := calls
+	// a brand new client for the same endpoint and model starts out knowing
+	if _, err := NewHTTP("a", cfg).Complete(context.Background(), req); err != nil || calls != first+1 {
+		t.Fatalf("second client did not start informed: calls %d -> %d, %v", first, calls, err)
+	}
+}
+
+func TestOtherBadRequestsAreNotRetried(t *testing.T) {
+	var calls int
+	s := srv(t, func(string, map[string]any) (int, string) {
+		calls++
+		return 400, `{"error":{"message":"messages: must not be empty"}}`
+	})
+	defer s.Close()
+	_, err := NewHTTP("a", config.Provider{Enabled: true, BaseURL: s.URL, Model: "plain-1"}).Complete(context.Background(), Request{})
+	if KindOf(err) != KindBadRequest || calls != 1 {
+		t.Fatalf("calls %d err %v", calls, err)
+	}
+}
+
+func TestCleanTextDropsThoughtsEvenWhenCutOff(t *testing.T) {
+	for in, want := range map[string]string{
+		"<think>hm</think>hello":              "hello",
+		"hi <think>still thinking about the":  "hi",
+		"<think>never finished":               "",
+		"thought</think>the answer":           "the answer",
+		"plain text with <thinking> in prose": "plain text with <thinking> in prose",
+	} {
+		if got := CleanText(in); got != want {
+			t.Errorf("CleanText(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
