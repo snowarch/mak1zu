@@ -7,7 +7,7 @@ What we checked, what we chose, and why. Dated 2026-10-06.
 - A companion bot is I/O bound (network, SQLite, a few goroutines per channel).
   Go gives cheap concurrency, a single static binary, fast startup and trivial
   cross-compilation, which is exactly "Linux first, distro-agnostic".
-- **No CGO** is a hard rule (CI enforces `CGO_ENABLED=0`). That is what makes
+- **No CGO** is a hard rule (`make check` builds with `CGO_ENABLED=0`). That is what makes
   the binary run on glibc, musl, NixOS and containers alike.
 - Release plan: `goreleaser` tarballs for linux/amd64+arm64 (a Raspberry Pi is a
   realistic home for a companion), `.deb`/`.rpm`/Arch packages via nfpm, an AUR

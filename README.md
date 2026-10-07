@@ -70,7 +70,7 @@ Add a character by copying [docs/PERSONA_TEMPLATE.md](docs/PERSONA_TEMPLATE.md),
 ## Develop
 
 ```bash
-make test        # go test -race ./...  (offline, a few seconds)
+make check       # vet + go test -race + CGO-free build (offline, a few seconds)
 make build       # static, CGO-free binary in bin/
 ```
 

@@ -1,6 +1,6 @@
 # Contributing
 
-1. `go vet ./... && go test -race ./...` (offline) must pass, and `CGO_ENABLED=0 go build ./cmd/mak1zu` must keep working.
+1. `make check` must pass (`go vet`, `go test -race`, and a CGO-free build; all offline). There is no hosted CI, so this is the gate: run it before you open a PR.
 2. Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) invariants and [docs/SECURITY.md](docs/SECURITY.md) rules first.
 3. Fix bugs with a test that uses the real malformed shape *and* the nearest legitimate case, so a guard never gets broader than the bug.
 4. Do not solve a persona problem in code or a code problem in a persona. Tics are `guard`'s job; voice is the character file's.
