@@ -183,17 +183,26 @@ func TestBridgedHumanWebhookIsAPersonButARealBotIsNot(t *testing.T) {
 }
 
 func TestOnePersonsBadMoodIsNotWornByEveryoneElse(t *testing.T) {
-	e, _, sc := setup(t, say("a"), say("b"), say("c"), say("d"), say("e"), say("f"), say("g"), say("h"), say("i"))
+	steps := make([]func(providerRequest) (providerResponse, error), 20)
+	for i := range steps {
+		steps[i] = say("ok")
+	}
+	e, _, sc := setup(t, steps...)
+	e.Cfg.Patch(map[string]any{"behavior.response.max_per_minute": 0}) // the ceiling would stop her at ten
 	ctx := context.Background()
 	rude := "this is awful and broken, i hate this, terrible, so annoying"
-	for i := 0; i < 8; i++ {
+	for i := 0; i < 16; i++ {
 		e.Handle(ctx, dmFrom("r"+string(rune('a'+i)), "u1", "Alice", rude))
 	}
-	if !strings.Contains(sc.reqs[len(sc.reqs)-1].System, "irritated") {
-		t.Fatalf("eight rude messages should sour her toward alice:\n%s", sc.reqs[len(sc.reqs)-1].System)
+	alice := e.moodFor(personID(t, e, "u1")).Snapshot()
+	if alice.Valence > -0.2 {
+		t.Fatalf("sixteen rude messages should sour her toward alice, valence %.2f", alice.Valence)
 	}
 	e.Handle(ctx, dmFrom("b1", "u2", "Bob", "hi, how are you"))
+	if bob := e.moodFor(personID(t, e, "u2")).Snapshot(); bob.Valence < -0.05 {
+		t.Fatalf("alice's rudeness leaked into how she feels about bob: %.2f", bob.Valence)
+	}
 	if strings.Contains(sc.reqs[len(sc.reqs)-1].System, "irritated") {
-		t.Fatal("alice's rudeness made her irritated at bob")
+		t.Fatal("bob's prompt says she is irritated")
 	}
 }
