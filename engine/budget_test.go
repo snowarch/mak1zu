@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"io/fs"
+	"strings"
 	"testing"
 
 	makizu "github.com/snowarch/mak1zu"
@@ -35,4 +36,28 @@ func TestEveryTurnStaysInsideItsBudget(t *testing.T) {
 		t.Errorf("persona + substrate are %d bytes (budget %d)", n, basePromptBudget)
 	}
 	t.Logf("tools %d/%d bytes, base prompt %d/%d bytes", tot, toolSchemaBudget, len(body)+len(persona.Substrate), basePromptBudget)
+}
+
+// The skill she reads to answer questions about herself must not drift from
+// what she can actually do: every tool and every command is named in it.
+func TestHowIWorkNamesEverythingShe(t *testing.T) {
+	e, _, _ := setup(t)
+	b, err := fs.ReadFile(makizu.Defaults, ".makizu/skills/how-i-work/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := string(b)
+	for _, s := range e.Tools.Specs(true) {
+		if !strings.Contains(doc, s.Name) {
+			t.Errorf("tool %s is not in the how-i-work skill", s.Name)
+		}
+	}
+	for _, c := range e.Commands() {
+		if c.Name == "ping" || c.Name == "persona" {
+			continue
+		}
+		if !strings.Contains(doc, "/"+c.Name) {
+			t.Errorf("command /%s is not in the how-i-work skill", c.Name)
+		}
+	}
 }
