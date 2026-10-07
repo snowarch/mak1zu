@@ -36,7 +36,7 @@ thinks with) and **Plugin** (what she can do). Everything else is replaceable.
 | `memory` | SQLite (pure Go) + FTS5: memories, people, per-character relationships, facts, turns, reminders. Optional embedder rerank. | Deciding what is worth remembering (engine/tools do). |
 | `guard` | The one public-text boundary: protocol/leak stripping, tic detection, loop detection, emoji budget, safe splitting. | Voice. |
 | `engine` | Policy, turn pipeline, incidents, promise audit, reminders, maintenance. | Platform and provider details. |
-| `tools` | Registry, SSRF-safe fetch, built-in tools (remember, recall, forget_me, set_reminder, react, read_url, web_search, review_myself, now). | Anything that reads the host filesystem. |
+| `tools` | Registry, SSRF-safe fetch, built-in tools (remember, recall, forget_me, set_reminder, react, read_url, web_search, wallpaper, image_search, reaction_gif, write_file, anime_search, anime_airing, read_skill, review_myself, now). | Anything that reads the host filesystem. |
 | `mcpclient` | MCP servers → `sdk.Tool` (allowlist per server, namespaced names, child env scrubbed of companion secrets). | Sandboxing the servers: they are your code, review them. |
 | `panel` | Embedded web UI, JSON API, CSRF/rebinding guards. | Persisting anything but config and persona files. |
 | `transport/discord` | discordgo ⇄ `sdk.Transport`, emoji resolution at send time, mention neutralisation. | Whether to answer. |

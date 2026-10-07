@@ -19,6 +19,29 @@ The default character is **Maki**: flat and dry on the surface, shy underneath. 
 - **Extensible.** Tools and hooks in about 20 lines of Go, any [MCP](https://modelcontextprotocol.io) server as a tool source, transports in five methods, personalities in Markdown. [docs/SDK.md](docs/SDK.md)
 - **Slash commands:** `/persona` (owner), `/mood`, `/remember`, `/memories`, `/forget`, `/ping`.
 
+## What she can do
+
+Every tool below is offered on every message; she decides when to use one. None needs a key or a server.
+
+| Someone asks for | Tool | Where it comes from |
+| --- | --- | --- |
+| news, a fact, a release date, anything current | `web_search` | Exa, DuckDuckGo and Bing in turn; your own [SearXNG](https://docs.searxng.org) first if you set `search.searxng_url` |
+| a summary of a link, a GitHub repo, a page | `read_url` | the page itself (public addresses only) |
+| a wallpaper | `wallpaper` | wallhaven.cc, safe-for-work only (fixed in code) |
+| a photo of something | `image_search` | Wikimedia Commons |
+| a reaction GIF | `reaction_gif` | nekos.best |
+| anime or manga info, what airs today | `anime_search`, `anime_airing` | AniList |
+| a file (html, json, a script) | `write_file` | made on the spot and attached to her reply |
+| remember me, remind me in 20 minutes | `remember`, `recall`, `set_reminder`, `forget_me` | her own memory |
+| what is in a picture you posted | vision | needs a model that accepts images |
+| anything else | any MCP server | `tools.mcp_servers` |
+
+Links for images, wallpapers and GIFs always come from the service's own answer and are checked against its host: she cannot make one up or be steered to another site.
+
+Checked live in a Discord channel on 2026-10-07 with a real model: web search (an answer that matched go.dev), reading a page, wallpaper, photo search, GIF, anime lookup, an attached `.html` file, memory, a reminder that fired on time, and an image she described correctly. Only unit-tested so far: `anime_airing` and MCP servers.
+
+What she does not do: join voice channels, run commands or read files on the host (by design, see [docs/SECURITY.md](docs/SECURITY.md)), moderate people, or generate images.
+
 ## Quick start
 
 ```bash
