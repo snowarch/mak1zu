@@ -130,9 +130,21 @@ func mentionsName(content, name string) bool {
 	return err == nil && re.MatchString(content)
 }
 
+// Who is what the engine knows about the speaker's standing: whether anyone
+// holds the owner role and whether this speaker does. Owner is a role on a
+// person, so it holds from every transport that person is linked to.
+type Who struct{ HasOwner, IsOwner bool }
+
 // Decide returns whether to respond and the reason. self is the companion's
-// display name used for name-calls.
+// display name used for name-calls. The owner is taken from discord.owner_id;
+// the engine itself uses DecideAs with the owner role.
 func (p *Policy) Decide(m sdk.Message, cfg config.Config, self string) (bool, Reason) {
+	o := cfg.Discord.OwnerID
+	return p.DecideAs(m, cfg, self, Who{HasOwner: o != "", IsOwner: o != "" && m.AuthorID == o})
+}
+
+// DecideAs is Decide with the speaker's standing already resolved.
+func (p *Policy) DecideAs(m sdk.Message, cfg config.Config, self string, who Who) (bool, Reason) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	now := p.now()
@@ -195,7 +207,7 @@ func (p *Policy) Decide(m sdk.Message, cfg config.Config, self string) (bool, Re
 
 	// DMs: only the owner, unless no owner is configured (single-user install).
 	if m.IsDM {
-		if d.OwnerID != "" && m.AuthorID != d.OwnerID {
+		if who.HasOwner && !who.IsOwner {
 			return false, ReasonOwnerOnly
 		}
 		return accept(true, ReasonDM)

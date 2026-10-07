@@ -25,7 +25,7 @@ type fakeTransport struct {
 	hist []sdk.Message
 }
 
-func (f *fakeTransport) Name() string                           { return "fake" }
+func (f *fakeTransport) Name() string                           { return "discord" }
 func (f *fakeTransport) Run(context.Context, sdk.Handler) error { return nil }
 func (f *fakeTransport) Typing(context.Context, string) error   { return nil }
 func (f *fakeTransport) Self() sdk.Identity                     { return sdk.Identity{ID: "bot", Name: "Maki"} }
@@ -96,6 +96,16 @@ func setup(t *testing.T, steps ...func(provider.Request) (provider.Response, err
 	return e, tr, sc
 }
 
+// personID is the person an account became; memory is keyed by it, not by the platform id.
+func personID(t *testing.T, e *Engine, external string) string {
+	t.Helper()
+	p, ok, err := e.Mem.Lookup(context.Background(), e.Tr.Name(), external)
+	if err != nil || !ok {
+		t.Fatalf("no person for account %q: %v", external, err)
+	}
+	return p.ID
+}
+
 func msg(id, content string) sdk.Message {
 	return sdk.Message{ID: id, ChannelID: "home", AuthorID: "u1", AuthorName: "Alice", Content: content, Mentioned: true, GuildID: "g", Time: time.Now()}
 }
@@ -129,7 +139,8 @@ func TestToolLoopRunsToolThenSpeaks(t *testing.T) {
 	if got := tr.texts(); len(got) != 1 || got[0] != "noted, frieren person" {
 		t.Fatalf("%v", got)
 	}
-	ms, _ := e.Mem.Recall(context.Background(), "maki", "u1", "frieren", 5)
+	pid := personID(t, e, "u1")
+	ms, _ := e.Mem.Recall(context.Background(), "maki", pid, "frieren", 5)
 	if len(ms) != 1 {
 		t.Fatalf("memory not saved: %v", ms)
 	}

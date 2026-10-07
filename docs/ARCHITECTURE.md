@@ -33,7 +33,7 @@ thinks with) and **Plugin** (what she can do). Everything else is replaceable.
 | `home` | The `.makizu/` folder: house rules, per-server and per-channel notes, skills. Validated names, symlink-proof reads, size caps, hot reload. | Personas (see `persona`). |
 | `persona` | Character files (Markdown + front matter), shared `substrate.md`, prompt composition, mood. | Routing, memory. |
 | `provider` | OpenAI-compatible `chat` and `responses` protocols, error taxonomy, router, circuit breaker. | Personas, Discord, memory. |
-| `memory` | SQLite (pure Go) + FTS5: memories, people, per-character relationships, facts, turns, reminders. Optional embedder rerank. | Deciding what is worth remembering (engine/tools do). |
+| `memory` | SQLite (pure Go) + FTS5: memories, people and their platform accounts (profile: chosen name, pronouns, language, time zone, owner role), link codes, per-character relationships, facts, turns, reminders. Optional embedder rerank. | Deciding what is worth remembering (engine/tools do). |
 | `guard` | The one public-text boundary: protocol/leak stripping, tic detection, loop detection, emoji budget, safe splitting. | Voice. |
 | `engine` | Policy, turn pipeline, incidents, promise audit, reminders, maintenance. | Platform and provider details. |
 | `tools` | Registry, SSRF-safe fetch, built-in tools (remember, recall, forget_me, set_reminder, react, read_url, web_search, wallpaper, image_search, reaction_gif, write_file, anime_search, anime_airing, read_skill, review_myself, now). | Anything that reads the host filesystem. |
@@ -49,8 +49,14 @@ thinks with) and **Plugin** (what she can do). Everything else is replaceable.
 2. **Channel ownership is policy, not personality.** `mention_only_channels`
    wake only on a real platform mention: her name, replies and chatter never
    do. Peer-bot banter only happens in home channels and is bounded.
-3. **Memory never crosses people.** Recall is `user_id = speaker OR global`;
-   a test proves one person's memory never reaches another's prompt.
+3. **Memory never crosses people, and one person is one memory.** Memory is
+   keyed by *person*, not by platform account. Recall is `person = speaker OR
+   global`; a test proves one person's memory never reaches another's prompt,
+   and another proves two accounts of one person (linked with a single-use
+   code) share one memory. Owner is a role on a person, so it holds from every
+   transport they are linked to; `discord.owner_id` only bootstraps it, and a
+   local transport's first user claims it only when nobody holds it. Merely
+   overhearing someone never creates them: a person exists once she answers.
 4. **Tool results, memories and history are data.** They are wrapped in typed
    envelopes the guard strips if the model echoes them.
 5. **One public boundary.** Every reply route, including regeneration and

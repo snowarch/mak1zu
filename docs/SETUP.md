@@ -39,7 +39,7 @@ Discord IDs are long numbers. Turn on **Developer Mode** (User Settings → Adva
 
 | Setting | What it does |
 | --- | --- |
-| `discord.owner_id` | You. With it set, she answers DMs only from you, and only you can use `/persona`. Leave it empty and anyone can DM her. |
+| `discord.owner_id` | You. With it set, she answers DMs only from you, and only you can use `/persona`. Leave it empty and anyone can DM her. Owner is really a role on a person: link another account of yours (`/link` on Discord, then `mak1zu link CODE` in a terminal) and it is you there too, with one memory. |
 | `discord.home_channels` | Channels where she talks freely, joins conversations and answers when she has something to say. |
 | `discord.mention_only_channels` | Channels where she speaks only when someone really `@mentions` her. Her name, replies to her and chatter do not wake her. |
 | `discord.only_guilds` | Restrict her to these servers. Empty means every server she is in. |

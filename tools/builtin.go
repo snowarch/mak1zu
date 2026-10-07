@@ -55,6 +55,18 @@ func Builtins(d Deps) []sdk.Tool {
 				id, err := d.Mem.Remember(ctx, d.Persona(), k, env.Speaker.ID, a.Content, 0.6, "")
 				return fmt.Sprintf("saved #%d", id), err
 			}},
+		sdk.ToolFunc{S: sdk.ToolSpec{Name: "set_profile", Description: "Save how the person you are talking to wants to be treated: what to call them, their pronouns, language or time zone. Only what they told you about themselves, on every platform they use. An empty value clears it.",
+			Schema: Schema([]string{"field", "value"}, map[string][2]string{"field": {"string", "call_me, pronouns, language or tz"}, "value": {"string", "the value, e.g. Ren, they/them, Spanish, Europe/Madrid"}})},
+			F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
+				a, err := args[struct{ Field, Value string }](raw)
+				if err != nil {
+					return "", err
+				}
+				if err := d.Mem.SetProfile(ctx, env.Speaker.ID, a.Field, a.Value); err != nil {
+					return "not saved: " + err.Error(), nil
+				}
+				return "saved", nil
+			}},
 		sdk.ToolFunc{S: sdk.ToolSpec{Name: "recall", Description: "Search your memories about the person you are talking to.",
 			Schema: Schema([]string{"query"}, map[string][2]string{"query": {"string", "what to look for"}})},
 			F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {

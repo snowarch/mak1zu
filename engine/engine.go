@@ -167,12 +167,16 @@ func (e *Engine) Handle(ctx context.Context, m sdk.Message) {
 	if pa.Mood {
 		e.mood.Observe(m.AuthorName, m.Content, m.Mentioned || m.IsDM)
 	}
-	ok, reason := e.Pol.Decide(m, cfg, pa.Name)
-	first := ok && e.firstContact(ctx, pa.ID, m.AuthorID)
+	// Deciding to stay quiet must not create anyone: she only keeps people she
+	// actually talks to. Standing is looked up, the person is made after.
+	seen, known := e.lookupPerson(ctx, m)
+	ok, reason := e.Pol.DecideAs(m, cfg, pa.Name, e.standing(ctx, m, seen))
+	first := ok && (!known || e.firstContact(ctx, pa.ID, seen.ID))
 	e.heard(m, cfg, ok, reason, first)
 	if !ok {
 		return
 	}
+	per := e.person(ctx, m)
 
 	// Burst collapse: when several ambient messages land together, only the
 	// latest gets a turn. Direct calls always get theirs.
@@ -200,7 +204,7 @@ func (e *Engine) Handle(ctx context.Context, m sdk.Message) {
 		attempts = 1
 	}
 	for a := 1; a <= attempts; a++ {
-		out := e.turn(ctx, m, reason, pa)
+		out := e.turn(ctx, m, reason, pa, per)
 		if out.err == nil && out.verdict == guard.OK {
 			return
 		}
@@ -256,7 +260,7 @@ func wordEdge(parts ...string) string {
 	return `(?:^|[^\p{L}\p{N}_])(?:` + strings.Join(parts, "|") + `)(?:$|[^\p{L}\p{N}_])`
 }
 
-func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa persona.Persona) (out turnOut) {
+func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa persona.Persona, per memory.Person) (out turnOut) {
 	cfg := e.Cfg.Get()
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 150*time.Second)
@@ -264,9 +268,10 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	e.Tr.Typing(ctx, m.ChannelID)
 
 	// Memory is scoped to the speaker. Never mix people.
-	_ = e.Mem.Touch(ctx, pa.ID, m.AuthorID, m.AuthorName)
-	rel, _ := e.Mem.Relationship(ctx, pa.ID, m.AuthorID)
-	mems, _ := e.Mem.Recall(ctx, pa.ID, m.AuthorID, m.Content, cfg.Memory.RecallLimit)
+	_ = e.Mem.Touch(ctx, pa.ID, per.ID, m.AuthorName)
+	rel, _ := e.Mem.Relationship(ctx, pa.ID, per.ID)
+	mems, _ := e.Mem.Recall(ctx, pa.ID, per.ID, m.Content, cfg.Memory.RecallLimit)
+	name := per.Display() // the name they chose, else their platform name
 	var memText []string
 	for _, x := range mems {
 		memText = append(memText, x.Content)
@@ -274,14 +279,14 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 
 	pctx := persona.Context{
 		Now: time.Now().Format("Monday 2 January 2006, 15:04 MST"), Platform: e.Tr.Name(),
-		Speaker: m.AuthorName, Relationship: rel.Describe(), Memories: memText,
+		Speaker: name, Relationship: rel.Describe(), Memories: memText,
 		LanguageHint: languageHint(cfg.Language),
 	}
 	if pa.Mood {
 		pctx.Mood = e.mood.Describe()
 	}
 	if m.IsDM {
-		pctx.Place = "a private DM with " + m.AuthorName
+		pctx.Place = "a private DM with " + name
 	} else {
 		pctx.Place = strings.TrimSpace("#" + m.ChannelName + " in " + m.GuildName)
 	}
@@ -296,6 +301,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 		}
 		pctx.Skills = append(pctx.Skills, line)
 	}
+	pctx.Extra = append(pctx.Extra, e.profileNotes(per, rel, m)...)
 	if b := e.Inc.Block(m.ChannelID); b != "" {
 		pctx.Extra = append(pctx.Extra, b)
 	}
@@ -312,7 +318,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	system := persona.Compose(pa, pctx)
 
 	msgs := e.history(ctx, m, cfg.Behavior.Turn.HistoryLimit)
-	cur := provider.Message{Role: provider.User, Content: label(m.AuthorName, m.Content)}
+	cur := provider.Message{Role: provider.User, Content: label(name, m.Content)}
 	for _, a := range m.Attachments {
 		if strings.HasPrefix(a.ContentType, "image/") {
 			cur.Images = append(cur.Images, a.URL)
@@ -331,7 +337,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	var reactions []string
 	var links []string
 	env := &sdk.CallEnv{
-		Speaker: sdk.Identity{ID: m.AuthorID, Name: m.AuthorName}, ChannelID: m.ChannelID, GuildID: m.GuildID, IsDM: m.IsDM, Persona: pa.ID,
+		Speaker: sdk.Identity{ID: per.ID, Name: name}, ChannelID: m.ChannelID, GuildID: m.GuildID, IsDM: m.IsDM, Persona: pa.ID,
 		QueueFile: func(f sdk.File) { queued = append(queued, f) },
 		React:     func(x string) { reactions = append(reactions, x) },
 		AttachLink: func(u string) {
@@ -459,7 +465,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 		e.recent[m.ChannelID] = e.recent[m.ChannelID][n-8:]
 	}
 	e.mu.Unlock()
-	_ = e.Mem.LogTurn(ctx, pa.ID, m.AuthorID, m.ChannelID, m.Content, final)
+	_ = e.Mem.LogTurn(ctx, pa.ID, per.ID, m.ChannelID, m.Content, final)
 	for _, h := range hooks {
 		if h.AfterReply != nil {
 			h.AfterReply(ctx, m, final)
@@ -470,7 +476,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	e.replied(m, cfg, final, resp, time.Since(start), toolsUsed)
 	if cfg.Memory.AutoExtract && memoryCandidate(m.Content) {
 		if !slicesContains(toolsUsed, "remember") { // the model already saved it on purpose
-			go e.extractMemories(context.WithoutCancel(ctx), pa, m)
+			go e.extractMemories(context.WithoutCancel(ctx), pa, m, per)
 		}
 	}
 	return out

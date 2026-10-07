@@ -54,6 +54,8 @@ Usage:
   mak1zu doctor [--offline]    check config, persona, memory and make a real call to each provider
   mak1zu persona list|check    list personas / validate the active one
   mak1zu eval <inputs.txt>     score the active persona's voice on a list of inputs
+  mak1zu link [CODE]           make the terminal the same person as your Discord account: run /link there
+                               for a code and pass it here, or run without a code to get one for the other side
   mak1zu service               print a systemd user unit
   mak1zu version
 
@@ -81,7 +83,7 @@ func main() {
 		cmdProviders()
 	case "service":
 		err = cmdService(*cfgPath)
-	case "run", "chat", "doctor", "persona", "eval":
+	case "run", "chat", "doctor", "persona", "eval", "link":
 		var st *config.Store
 		if st, err = loadConfig(*cfgPath); err != nil {
 			break
@@ -95,6 +97,8 @@ func main() {
 			err = cmdDoctor(st, len(args) > 1 && args[1] == "--offline")
 		case "persona":
 			err = cmdPersona(st, args[1:])
+		case "link":
+			err = cmdLink(st, args[1:])
 		case "eval":
 			if len(args) < 2 {
 				err = errors.New("usage: mak1zu eval <inputs.txt>  (one message per line)")
@@ -438,6 +442,36 @@ func cmdChat(st *config.Store) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	return tr.Run(ctx, func(ctx context.Context, m sdk.Message) { e.Handle(ctx, m) })
+}
+
+// cmdLink joins the terminal to the person you already are elsewhere, so there
+// is one memory: with a code from another platform it links this terminal; with
+// none it prints a code for that other platform to use.
+func cmdLink(st *config.Store, args []string) error {
+	mem, err := memory.Open(st.Abs(st.Get().Memory.Path))
+	if err != nil {
+		return err
+	}
+	defer mem.Close()
+	ctx := context.Background()
+	if len(args) > 0 {
+		p, err := mem.Link(ctx, "cli", "user", "you", args[0])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("linked: the terminal is %s now, one memory\n", p.Display())
+		return nil
+	}
+	p, err := mem.Resolve(ctx, "cli", "user", "you")
+	if err != nil {
+		return err
+	}
+	code, err := mem.NewLinkCode(ctx, p.ID)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("code %s (10 minutes, one use)\nOn the other account say: /link %s\n", code, code)
+	return nil
 }
 
 func cmdDoctor(st *config.Store, offline bool) error {

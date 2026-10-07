@@ -13,13 +13,15 @@ import (
 // Commands returns the platform commands. OwnerOnly is enforced here, not in
 // the transport, so every platform gets the same rule.
 func (e *Engine) Commands() []sdk.Command {
-	owner := func(c sdk.CommandCall) bool {
-		o := e.Cfg.Get().Discord.OwnerID
-		return o == "" || c.UserID == o
+	owner := func(ctx context.Context, c sdk.CommandCall) bool {
+		if e.account(ctx, c.UserID, c.UserName).IsOwner() {
+			return true
+		}
+		return !e.Mem.HasOwner(ctx) && e.Cfg.Get().Discord.OwnerID == "" // nobody holds the role: single-user install
 	}
 	guardOwner := func(f func(context.Context, sdk.CommandCall) string) func(context.Context, sdk.CommandCall) string {
 		return func(ctx context.Context, c sdk.CommandCall) string {
-			if !owner(c) {
+			if !owner(ctx, c) {
 				return "only the owner can do that"
 			}
 			return f(ctx, c)
@@ -53,14 +55,14 @@ func (e *Engine) Commands() []sdk.Command {
 					return "give me a sentence (8 to 400 characters)"
 				}
 				pa := e.Cfg.Get().Persona.Active
-				if _, err := e.Mem.Remember(ctx, pa, memory.Semantic, c.UserID, note, 0.7, "command"); err != nil {
+				if _, err := e.Mem.Remember(ctx, pa, memory.Semantic, e.account(ctx, c.UserID, c.UserName).ID, note, 0.7, "command"); err != nil {
 					return "could not save that"
 				}
 				return "noted"
 			}},
 		{Name: "memories", Description: "Show what she remembers about you (only you can see this)",
 			Run: func(ctx context.Context, c sdk.CommandCall) string {
-				ms, _ := e.Mem.Recall(ctx, e.Cfg.Get().Persona.Active, c.UserID, "", 10)
+				ms, _ := e.Mem.Recall(ctx, e.Cfg.Get().Persona.Active, e.account(ctx, c.UserID, c.UserName).ID, "", 10)
 				if len(ms) == 0 {
 					return "nothing yet"
 				}
@@ -70,12 +72,42 @@ func (e *Engine) Commands() []sdk.Command {
 				}
 				return b.String()
 			}},
+		{Name: "callme", Description: "Tell her what to call you, on every platform you use",
+			Options: []sdk.CommandOption{{Name: "name", Description: "what she should call you (empty to reset)", Required: false}},
+			Run: func(ctx context.Context, c sdk.CommandCall) string {
+				per := e.account(ctx, c.UserID, c.UserName)
+				n := strings.TrimSpace(c.Args["name"])
+				if err := e.Mem.SetProfile(ctx, per.ID, "call_me", n); err != nil {
+					return err.Error()
+				}
+				if n == "" {
+					return "back to " + per.Name
+				}
+				return "okay, " + n
+			}},
+		{Name: "link", Description: "Join this account to you elsewhere (terminal, other platform): run with no code to get one, or paste a code",
+			Options: []sdk.CommandOption{{Name: "code", Description: "a code from another platform", Required: false}},
+			Run: func(ctx context.Context, c sdk.CommandCall) string {
+				per := e.account(ctx, c.UserID, c.UserName)
+				if code := strings.TrimSpace(c.Args["code"]); code != "" {
+					p, err := e.Mem.Link(ctx, e.Tr.Name(), c.UserID, c.UserName, code)
+					if err != nil {
+						return err.Error()
+					}
+					return "linked: you are " + p.Display() + " here too, one memory"
+				}
+				code, err := e.Mem.NewLinkCode(ctx, per.ID)
+				if err != nil {
+					return "could not make a code"
+				}
+				return "code " + code + " (10 minutes, one use). On the other account say /link " + code + " or run `mak1zu link " + code + "` on the machine."
+			}},
 		{Name: "forget", Description: "Forget one memory by number, or everything about you with `all`",
 			Options: []sdk.CommandOption{{Name: "what", Description: "memory number or `all`", Required: true}},
 			Run: func(ctx context.Context, c sdk.CommandCall) string {
 				w := strings.TrimSpace(strings.ToLower(c.Args["what"]))
 				if w == "all" {
-					if err := e.Mem.ForgetUser(ctx, c.UserID); err != nil {
+					if err := e.Mem.ForgetUser(ctx, e.account(ctx, c.UserID, c.UserName).ID); err != nil {
 						return "could not erase"
 					}
 					return "everything about you is gone"
@@ -84,7 +116,7 @@ func (e *Engine) Commands() []sdk.Command {
 				if err != nil {
 					return "give me a memory number or `all`"
 				}
-				if ok, _ := e.Mem.Forget(ctx, c.UserID, id); ok {
+				if ok, _ := e.Mem.Forget(ctx, e.account(ctx, c.UserID, c.UserName).ID, id); ok {
 					return "forgotten"
 				}
 				return "no such memory of yours"

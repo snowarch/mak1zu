@@ -22,6 +22,10 @@ test is the best report.
 4. Anything model-visible that came from outside is data and is enveloped.
 5. Every new reply route ends in `guard.Clean`.
 6. IDs are strings.
+7. Identity is a person, not an account. A link code is single use, expires in
+   10 minutes and wrong guesses are capped; a profile value (the name someone
+   asks to be called) is single-line and short because it is pinned into her
+   prompt; `role` is never settable through the profile or any tool.
 
 Each rule has a regression test; a change that weakens one needs a new test
 that explains why.

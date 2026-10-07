@@ -74,11 +74,11 @@ func memoryCandidate(s string) bool {
 // extractMemories asks the model for durable facts in the speaker's own
 // message. It only ever stores what the person said about themselves, under
 // their id.
-func (e *Engine) extractMemories(ctx context.Context, pa persona.Persona, m sdk.Message) {
+func (e *Engine) extractMemories(ctx context.Context, pa persona.Persona, m sdk.Message, per memory.Person) {
 	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 	defer cancel()
 	sys := `Extract durable personal facts the speaker states about THEMSELVES (preferences, projects, relationships, routines, things they own). Ignore jokes, opinions about others, anything uncertain. Each fact is one short sentence that starts with the speaker's name (given below), e.g. ["<name> likes Frieren"]. Reply with ONLY a JSON array of strings. Empty array if nothing durable.`
-	resp, err := e.LLM.Complete(ctx, provider.Request{System: sys, MaxTokens: 200, Messages: []provider.Message{{Role: provider.User, Content: "Speaker name: " + m.AuthorName + "\nMessage: " + m.Content}}})
+	resp, err := e.LLM.Complete(ctx, provider.Request{System: sys, MaxTokens: 200, Messages: []provider.Message{{Role: provider.User, Content: "Speaker name: " + per.Display() + "\nMessage: " + m.Content}}})
 	if err != nil {
 		return
 	}
@@ -92,7 +92,7 @@ func (e *Engine) extractMemories(ctx context.Context, pa persona.Persona, m sdk.
 	}
 	for _, f := range facts[:min(len(facts), 4)] {
 		if len([]rune(f)) >= 12 {
-			_, _ = e.Mem.Remember(ctx, pa.ID, memory.Semantic, m.AuthorID, strings.TrimSpace(f), 0.55, "auto")
+			_, _ = e.Mem.Remember(ctx, pa.ID, memory.Semantic, per.ID, strings.TrimSpace(f), 0.55, "auto")
 		}
 	}
 }

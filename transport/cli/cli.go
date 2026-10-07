@@ -29,6 +29,7 @@ func New(in io.Reader, out io.Writer, user, bot string) *Transport {
 }
 
 func (t *Transport) Name() string                         { return "cli" }
+func (t *Transport) Local() bool                          { return true }
 func (t *Transport) Self() sdk.Identity                   { return sdk.Identity{ID: "bot", Name: t.BotName} }
 func (t *Transport) Typing(context.Context, string) error { return nil }
 

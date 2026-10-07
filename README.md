@@ -17,7 +17,7 @@ The default character is **Maki**: flat and dry on the surface, shy underneath. 
 - **A web panel** on `127.0.0.1:8787`: live feed of what she heard and why she stayed quiet, models, rooms, dials, her personality file. Changes apply instantly; keys are write-only.
 - **A guard on every reply.** No leaked prompts, no tool protocol, no `*stares*` ten times in a row, no "I'd be happy to help". A reply that promises an attachment and has none is caught.
 - **Extensible.** Tools and hooks in about 20 lines of Go, any [MCP](https://modelcontextprotocol.io) server as a tool source, transports in five methods, personalities in Markdown. [docs/SDK.md](docs/SDK.md)
-- **Slash commands:** `/persona` (owner), `/mood`, `/remember`, `/memories`, `/forget`, `/ping`.
+- **Slash commands:** `/persona` (owner), `/callme`, `/link`, `/mood`, `/remember`, `/memories`, `/forget`, `/ping`.
 
 ## What she can do
 

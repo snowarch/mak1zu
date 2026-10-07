@@ -69,6 +69,11 @@ type Transport interface {
 	Self() Identity
 }
 
+// Local is an optional transport capability: the person on the other end is
+// whoever runs the machine (the terminal, a local chat window). They become the
+// owner on first contact when nobody holds that role yet.
+type Local interface{ Local() bool }
+
 // Identity names the companion on a platform.
 type Identity struct {
 	ID   string
@@ -163,7 +168,7 @@ type CommandOption struct {
 
 // CommandCall is an invocation of a platform command.
 type CommandCall struct {
-	UserID    string
+	UserID    string // the platform account; the engine maps it to a person
 	UserName  string
 	ChannelID string
 	Args      map[string]string
