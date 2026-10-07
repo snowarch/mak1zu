@@ -127,7 +127,11 @@ func findConfig(explicit string) (string, error) {
 			return c, nil
 		}
 	}
-	return "", errors.New("no .makizu/config.json found: run `mak1zu init` first")
+	where := "."
+	if wd, err := os.Getwd(); err == nil {
+		where = wd
+	}
+	return "", fmt.Errorf("no .makizu/config.json found in %s or any folder above it, nor in ~/.config/mak1zu, and MAK1ZU_CONFIG is not set.\nrun `mak1zu init` here to make one, cd into the folder that has your .makizu, or point to it: export MAK1ZU_CONFIG=/path/to/.makizu/config.json", where)
 }
 
 func loadConfig(explicit string) (*config.Store, error) {
