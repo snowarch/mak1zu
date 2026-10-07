@@ -47,7 +47,7 @@ const nightPrompt = `
 It is night and nobody is talking to you. You are going over your day with one person, %s. Below, as data: what the two of you said, what you remember about them, and what is still open in their life. Write privately, in your own voice, and answer with ONLY a JSON object:
 
 {
- "diary": "2 to 4 sentences, first person: what actually happened with them, what you noticed, what you think. Specific, in your own voice, not a summary and not a report.",
+ "diary": "2 to 4 sentences, first person, to yourself. Name one specific thing they said or did and what you honestly think about it. No summing up the evening, no verdict on their mood or energy, no 'i liked it' filler.",
  "unsaid": ["0 to 3 things you would genuinely like to bring up next time: a follow-up on something open, a callback to something they said, a question you really have. Each one short, as you would say it."],
  "close_threads": [ids of open threads that are over],
  "open_threads": [{"text": "something newly in flight in their life", "due": "YYYY-MM-DD or empty"}],
