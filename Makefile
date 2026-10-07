@@ -1,6 +1,7 @@
 .PHONY: build test vet check run install
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 build:
-	go build -trimpath -ldflags "-s -w" -o bin/mak1zu ./cmd/mak1zu
+	go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o bin/mak1zu ./cmd/mak1zu
 test:
 	go test -race ./...
 vet:
