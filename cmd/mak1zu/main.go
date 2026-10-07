@@ -19,6 +19,7 @@ import (
 	makizu "github.com/snowarch/mak1zu"
 	"github.com/snowarch/mak1zu/config"
 	"github.com/snowarch/mak1zu/engine"
+	"github.com/snowarch/mak1zu/home"
 	"github.com/snowarch/mak1zu/internal/telemetry"
 	"github.com/snowarch/mak1zu/mcpclient"
 	"github.com/snowarch/mak1zu/memory"
@@ -38,6 +39,9 @@ Usage:
   mak1zu init [--provider ID] [dir]
                                create dir/.makizu with config, personas, rules and skills (default .);
                                on a terminal it asks which provider, or pass an id from "mak1zu providers"
+  mak1zu init --update [--dry-run] [--force] [dir]
+                               bring an existing .makizu up to this version's personas, rules and skills
+                               without overwriting what you changed (--dry-run looks first)
   mak1zu providers             list provider presets: cost, default model, where to get a key
   mak1zu run                   start the companion (Discord + web panel)
   mak1zu chat                  talk to her in the terminal
@@ -159,12 +163,21 @@ func cmdInitArgs(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	preset := fs.String("provider", "", "provider preset id; run \"mak1zu providers\" for the list")
 	key := fs.String("key", "", "API key for the preset (prefer the hidden prompt: flags land in shell history)")
+	update := fs.Bool("update", false, "update an existing .makizu to this version's defaults, keeping your edits")
+	dry := fs.Bool("dry-run", false, "with --update: show what would change and write nothing")
+	force := fs.Bool("force", false, "with --update: overwrite files you changed (the old copy is kept in .makizu/.backup)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	dir := "."
 	if fs.NArg() > 0 {
 		dir = fs.Arg(0)
+	}
+	if *update {
+		return cmdUpdate(dir, fs.NArg() > 0, *dry, *force)
+	}
+	if *dry || *force {
+		return errors.New("--dry-run and --force only make sense with --update")
 	}
 	var pr provider.Preset
 	switch {
@@ -185,11 +198,11 @@ func cmdInitArgs(args []string) error {
 }
 
 func cmdInit(dir string, pr provider.Preset, key string) error {
-	home := filepath.Join(dir, ".makizu")
-	if err := os.MkdirAll(filepath.Join(home, "data"), 0o700); err != nil {
+	root := filepath.Join(dir, ".makizu")
+	if err := os.MkdirAll(filepath.Join(root, "data"), 0o700); err != nil {
 		return err
 	}
-	cfgPath := filepath.Join(home, "config.json")
+	cfgPath := filepath.Join(root, "config.json")
 	if _, err := os.Stat(cfgPath); err == nil {
 		return fmt.Errorf("%s already exists; refusing to overwrite", cfgPath)
 	}
@@ -202,47 +215,43 @@ func cmdInit(dir string, pr provider.Preset, key string) error {
 	if err := config.New(cfgPath, cfg).Save(cfg); err != nil {
 		return err
 	}
-	copied, kept := 0, 0
-	err := fs.WalkDir(makizu.Defaults, ".makizu", func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		dst := filepath.Join(dir, p)
-		if _, err := os.Stat(dst); err == nil {
-			kept++ // never overwrite what the user already wrote
-			return nil
-		}
-		b, _ := makizu.Defaults.ReadFile(p)
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return err
-		}
-		copied++
-		return os.WriteFile(dst, b, 0o644)
-	})
+	defaults, err := defaultsFS()
 	if err != nil {
 		return err
+	}
+	changes, err := home.SyncDefaults(defaults, root, home.SyncOptions{InitOnly: true, Version: version})
+	if err != nil {
+		return err
+	}
+	copied, kept := 0, 0
+	for _, c := range changes {
+		if c.Action == home.Added {
+			copied++
+		} else {
+			kept++ // never overwrite what the user already wrote
+		}
 	}
 	env := "# Secrets. Never commit this file. Load with: set -a; . ./.makizu/.env; set +a\n"
 	if keyEnv != "" {
 		env += keyEnv + "=" + key + "\n"
 	}
 	env += "MAK1ZU_DISCORD_TOKEN=\n"
-	if err := os.WriteFile(filepath.Join(home, ".env"), []byte(env), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".env"), []byte(env), 0o600); err != nil {
 		return err
 	}
-	_ = os.WriteFile(filepath.Join(home, ".gitignore"), []byte("config.json\n.env\ndata/\n"), 0o644)
-	fmt.Printf("created %s (%d default files, %d kept)\n\nnext:\n", home, copied, kept)
+	_ = os.WriteFile(filepath.Join(root, ".gitignore"), []byte("config.json\n.env\ndata/\n.updates/\n.backup/\n"), 0o644)
+	fmt.Printf("created %s (%d default files, %d kept)\n\nnext:\n", root, copied, kept)
 	step := 1
 	say := func(f string, a ...any) { fmt.Printf("  %d. "+f+"\n", append([]any{step}, a...)...); step++ }
 	switch {
 	case pr.ID == "":
-		say("put your API key in %s/.env and set the provider in the panel or config.json", home)
+		say("put your API key in %s/.env and set the provider in the panel or config.json", root)
 	case pr.KeyEnv == "":
 		say("%s: %s", pr.Label, pr.Note)
 	case key != "":
-		say("key saved in %s/.env as %s", home, pr.KeyEnv)
+		say("key saved in %s/.env as %s", root, pr.KeyEnv)
 	default:
-		say("get a key at %s and put it in %s/.env as %s", pr.KeyURL, home, pr.KeyEnv)
+		say("get a key at %s and put it in %s/.env as %s", pr.KeyURL, root, pr.KeyEnv)
 	}
 	if pr.ID != "" && pr.Note != "" && pr.KeyEnv != "" {
 		fmt.Printf("     heads up: %s\n", pr.Note)
@@ -250,7 +259,7 @@ func cmdInit(dir string, pr provider.Preset, key string) error {
 	say("mak1zu doctor    (a real call to the provider; it says what to fix)")
 	say("mak1zu chat      (try her in the terminal)")
 	say("mak1zu run       (panel at http://127.0.0.1:8787; Discord setup is in docs/SETUP.md)")
-	fmt.Printf("\nher rules, skills and personalities live in %s: edit them by hand or in the panel.\n", home)
+	fmt.Printf("\nher rules, skills and personalities live in %s: edit them by hand or in the panel.\n", root)
 	return nil
 }
 
@@ -427,6 +436,13 @@ func cmdDoctor(st *config.Store, offline bool) error {
 	} else {
 		fmt.Println("[skip] discord is off: terminal and panel only (docs/SETUP.md has the steps to put her in a server)")
 	}
+	if defaults, err := defaultsFS(); err == nil {
+		if cs, err := home.SyncDefaults(defaults, filepath.Dir(st.Path()), home.SyncOptions{DryRun: true}); err == nil {
+			if apply, decide := home.Pending(cs); apply+decide > 0 {
+				fmt.Printf("[note] %d personality/rule/skill file(s) changed in this version (%d need a decision): `mak1zu init --update --dry-run` shows them\n", apply+decide, decide)
+			}
+		}
+	}
 	if _, err := memory.Open(st.Abs(cfg.Memory.Path)); err != nil {
 		check(false, "memory db opens: "+err.Error())
 	} else {
@@ -496,5 +512,69 @@ PrivateTmp=yes
 [Install]
 WantedBy=default.target
 `, exe, abs, filepath.Dir(abs), filepath.Dir(abs), filepath.Dir(abs))
+	return nil
+}
+
+// defaultsFS is the personas, rules and skills this binary ships, rooted at
+// the contents of .makizu.
+func defaultsFS() (fs.FS, error) { return fs.Sub(makizu.Defaults, ".makizu") }
+
+// cmdUpdate brings an existing .makizu up to this version's defaults. It never
+// overwrites a file the person changed: those get the new version staged next
+// to them under .updates/ for comparison.
+func cmdUpdate(dir string, explicitDir, dry, force bool) error {
+	root := filepath.Join(dir, ".makizu")
+	if !explicitDir {
+		p, err := findConfig("")
+		if err != nil {
+			return err
+		}
+		root = filepath.Dir(p)
+	}
+	if _, err := os.Stat(filepath.Join(root, "config.json")); err != nil {
+		return fmt.Errorf("%s has no config.json: run `mak1zu init` first", root)
+	}
+	defaults, err := defaultsFS()
+	if err != nil {
+		return err
+	}
+	changes, err := home.SyncDefaults(defaults, root, home.SyncOptions{DryRun: dry, Force: force, Version: version})
+	if err != nil {
+		return err
+	}
+	verb := map[home.Action]string{home.Added: "added", home.Updated: "updated", home.Replaced: "replaced", home.Conflict: "kept yours"}
+	if dry {
+		verb = map[home.Action]string{home.Added: "would add", home.Updated: "would update", home.Replaced: "would replace", home.Conflict: "would keep yours"}
+	}
+	tally := map[home.Action]int{}
+	for _, c := range changes {
+		tally[c.Action]++
+		switch c.Action {
+		case home.Same:
+		case home.Customized:
+		default:
+			line := fmt.Sprintf("  %-17s %s", verb[c.Action], c.Path)
+			if c.Action == home.Removed {
+				line = fmt.Sprintf("  %-17s %s", "skipped", c.Path)
+			}
+			if c.Note != "" {
+				line += "\n  " + fmt.Sprintf("%-17s %s", "", c.Note)
+			}
+			fmt.Println(line)
+		}
+	}
+	fmt.Printf("\n%s (mak1zu %s): %d up to date, %d of yours left alone", root, version, tally[home.Same], tally[home.Customized])
+	if n := tally[home.Added] + tally[home.Updated] + tally[home.Replaced]; n > 0 {
+		fmt.Printf(", %d %s", n, map[bool]string{true: "to change", false: "changed"}[dry])
+	}
+	fmt.Println()
+	if n := tally[home.Conflict]; n > 0 && !force && dry {
+		fmt.Printf("%d file(s) differ from this release and from what you started with. A real --update leaves yours untouched and saves the new version next to it in .updates/ so you can compare.\n", n)
+	} else if n > 0 && !force {
+		fmt.Printf("%d file(s) differ from this release and from what you started with. Yours are untouched; compare with:\n  diff -u %s/<file> %s/.updates/<file>\nor take the new one with --force (the old copy goes to .backup/).\n", n, root, root)
+	}
+	if !dry && tally[home.Added]+tally[home.Updated]+tally[home.Replaced] > 0 {
+		fmt.Println("personas, rules and skills are re-read on every message: no restart needed.")
+	}
 	return nil
 }
