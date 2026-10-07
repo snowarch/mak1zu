@@ -84,3 +84,26 @@ func TestSayBeforeTheEngineListensIsAnErrorNotAHang(t *testing.T) {
 		t.Fatal("expected an error")
 	}
 }
+
+func TestATurnSurvivesTheCallThatStartedIt(t *testing.T) {
+	tr := New("Maki", nil)
+	seen := make(chan error, 1)
+	run, stop := context.WithCancel(context.Background())
+	defer stop()
+	go tr.Run(run, func(ctx context.Context, m sdk.Message) {
+		time.Sleep(50 * time.Millisecond) // the model call takes a while
+		seen <- ctx.Err()
+	})
+	for i := 0; i < 100; i++ {
+		req, cancel := context.WithCancel(context.Background())
+		if tr.Say(req, "hi") == nil {
+			cancel() // the HTTP request is over
+			break
+		}
+		cancel()
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := <-seen; err != nil {
+		t.Fatalf("the turn was cancelled with the request: %v", err)
+	}
+}

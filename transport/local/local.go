@@ -85,7 +85,9 @@ func (t *Transport) Say(ctx context.Context, text string) error {
 	if t.User != nil {
 		authorName = t.User()
 	}
-	go h(ctx, sdk.Message{
+	// The turn outlives the call that started it: an HTTP request ends the moment
+	// it is accepted, and a cancelled context would kill the model call mid-way.
+	go h(context.WithoutCancel(ctx), sdk.Message{
 		Transport: "local", ID: fmt.Sprintf("l%d", id), ChannelID: Channel, AuthorID: "local",
 		AuthorName: authorName, Content: text, IsDM: true, Time: time.Now(),
 	})
