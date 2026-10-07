@@ -164,6 +164,11 @@ func (e *Engine) proposeChange(ctx context.Context, raw json.RawMessage, env *sd
 	if len(w.items) >= maxProposals {
 		return "there are already several drafts waiting; apply or discard some first", nil
 	}
+	for id, it := range w.items { // a newer draft of the same thing replaces the older one
+		if it.Kind == p.Kind && it.Name == p.Name {
+			delete(w.items, id)
+		}
+	}
 	w.seq++
 	p.ID = fmt.Sprintf("c%d", w.seq)
 	w.items[p.ID] = p
@@ -325,4 +330,26 @@ func configValue(c interface{}, path string) (any, bool) {
 		}
 	}
 	return m, true
+}
+
+// pendingNote tells her which drafts are waiting for a yes, because a tool
+// result from an earlier message is not in her history: without this she
+// forgets the draft id and drafts the same thing again when the owner agrees.
+func (e *Engine) pendingNote(ctx context.Context, personID, msgID string) string {
+	if p, ok, _ := e.Mem.Person(ctx, personID); !ok || !p.IsOwner() {
+		return ""
+	}
+	e.work.mu.Lock()
+	defer e.work.mu.Unlock()
+	var b strings.Builder
+	for _, it := range e.work.items {
+		if it.MsgID == msgID || time.Since(it.Created) > proposalTTL {
+			continue
+		}
+		fmt.Fprintf(&b, "- %s: %s\n", it.ID, it.Summary)
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return "Drafts waiting for your owner's answer:\n" + b.String() + "If they just said yes, call apply_change with that id now (do not draft it again). If they said no or changed their mind, call apply_change with discard."
 }

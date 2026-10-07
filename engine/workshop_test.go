@@ -159,3 +159,27 @@ func TestADraftCanBeDiscarded(t *testing.T) {
 		t.Fatal(out)
 	}
 }
+
+func TestPendingDraftsAreRememberedAcrossMessagesAndReplacedWhenRedrafted(t *testing.T) {
+	e, _, sc := setup(t, say("want it?"))
+	ctx := context.Background()
+	own := ownerEnv(t, e, "m1")
+	call(t, e, "propose_change", map[string]any{"kind": "rule", "name": "50-brief", "text": "Two lines."}, own)
+	call(t, e, "propose_change", map[string]any{"kind": "rule", "name": "50-brief", "text": "Two lines, max."}, ownerEnv(t, e, "m1"))
+	if n := len(e.work.items); n != 1 {
+		t.Fatalf("redrafting the same thing left %d drafts", n)
+	}
+	// the owner's next message: she must be told what is waiting
+	p, _, _ := e.Mem.Person(ctx, own.Speaker.ID)
+	if note := e.pendingNote(ctx, p.ID, "m2"); !strings.Contains(note, "c2") || !strings.Contains(note, "apply_change") {
+		t.Fatalf("the next turn does not mention the waiting draft: %q", note)
+	}
+	if note := e.pendingNote(ctx, p.ID, "m1"); note != "" {
+		t.Fatal("the message that made the draft must not be told to apply it")
+	}
+	other, _ := e.Mem.Resolve(ctx, "discord", "someone", "someone")
+	if note := e.pendingNote(ctx, other.ID, "m2"); note != "" {
+		t.Fatal("a non-owner was told about the owner's drafts")
+	}
+	_ = sc
+}

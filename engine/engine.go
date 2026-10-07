@@ -359,6 +359,9 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 		pctx.Skills = append(pctx.Skills, line)
 	}
 	pctx.Extra = append(pctx.Extra, e.profileNotes(per, rel, m)...)
+	if n := e.pendingNote(ctx, per.ID, m.ID); n != "" {
+		pctx.Extra = append(pctx.Extra, n)
+	}
 	if b := e.Inc.Block(m.ChannelID); b != "" {
 		pctx.Extra = append(pctx.Extra, b)
 	}
