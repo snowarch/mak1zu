@@ -24,9 +24,9 @@ import (
 	"github.com/snowarch/mak1zu/internal/events"
 	"github.com/snowarch/mak1zu/internal/telemetry"
 	"github.com/snowarch/mak1zu/memory"
-	"github.com/snowarch/mak1zu/transport/local"
 	"github.com/snowarch/mak1zu/persona"
 	"github.com/snowarch/mak1zu/provider"
+	"github.com/snowarch/mak1zu/transport/local"
 )
 
 //go:embed web
@@ -49,6 +49,9 @@ type Server struct {
 	// Chat is the local conversation: the web chat and the terminal UI talk to
 	// her through it, as the person at this machine.
 	Chat *local.Transport
+	// Command runs a slash command for the person at this machine (the
+	// terminal UI and the web chat use it). ok is false for an unknown name.
+	Command func(ctx context.Context, name, arg string) (out string, ok bool)
 	// Avatar returns the pre-rendered expression PNG at a size, when artwork is wired in.
 	Avatar  func(name string, size int) ([]byte, bool)
 	Version string
@@ -80,6 +83,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/events/recent", s.eventsRecent)
 	mux.HandleFunc("POST /api/preview", s.preview)
 	mux.HandleFunc("POST /api/chat/say", s.chatSay)
+	mux.HandleFunc("POST /api/chat/command", s.chatCommand)
 	mux.HandleFunc("GET /api/chat/stream", s.chatStream)
 	mux.HandleFunc("GET /api/chat/history", s.chatHistory)
 	mux.HandleFunc("GET /api/chat/file/{name}", s.chatFile)

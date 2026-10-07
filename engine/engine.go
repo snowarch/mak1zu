@@ -601,6 +601,9 @@ func (e *Engine) deliver(ctx context.Context, m sdk.Message, reason Reason, pa p
 		if c != "" {
 			e.tr(m.Transport).Typing(ctx, m.ChannelID)
 			d := min(float64(len(c))*t.TypingPerCh, t.TypingMax)
+			if e.isLocal(m.Transport) { // the terminal already shows she is typing; do not make the owner wait for theatre
+				d = min(d, 0.8)
+			}
 			e.Sleep(ctx, time.Duration(d*float64(time.Second)))
 		}
 		r := sdk.Reply{Text: c, ReplyToID: replyTo}

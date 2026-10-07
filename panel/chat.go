@@ -37,6 +37,24 @@ func (s *Server) chatSay(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 202, map[string]bool{"ok": true})
 }
 
+func (s *Server) chatCommand(w http.ResponseWriter, r *http.Request) {
+	if s.Command == nil {
+		fail(w, 404, errors.New("commands are not available in this build"))
+		return
+	}
+	var body struct{ Name, Arg string }
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14)).Decode(&body); err != nil {
+		fail(w, 400, err)
+		return
+	}
+	out, ok := s.Command(r.Context(), strings.ToLower(strings.TrimSpace(body.Name)), body.Arg)
+	if !ok {
+		fail(w, 404, errors.New("no such command"))
+		return
+	}
+	writeJSON(w, 200, map[string]string{"out": out})
+}
+
 // chatStream is server-sent events: replies, typing blips, and first of all
 // whatever she said while nobody was connected.
 func (s *Server) chatStream(w http.ResponseWriter, r *http.Request) {

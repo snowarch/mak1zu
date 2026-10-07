@@ -50,7 +50,9 @@ Usage:
                                without overwriting what you changed (--dry-run looks first)
   mak1zu providers             list presets (cost, model, where to get a key) and servers running here
   mak1zu run                   start the companion (Discord + web panel)
-  mak1zu chat                  talk to her in the terminal
+  mak1zu                       talk to her in the terminal (same as "mak1zu tui"): attaches to a running
+                               "mak1zu run", or starts her itself if none is running
+  mak1zu chat                  plain line-by-line chat, for scripts and persona work
   mak1zu doctor [--offline]    check config, persona, memory and make a real call to each provider
   mak1zu persona list|check    list personas / validate the active one
   mak1zu eval <inputs.txt>     score the active persona's voice on a list of inputs
@@ -72,8 +74,7 @@ func main() {
 	tools.UserAgent = provider.UserAgent
 	args := flag.Args()
 	if len(args) == 0 {
-		flag.Usage()
-		os.Exit(2)
+		args = []string{"tui"}
 	}
 	var err error
 	switch args[0] {
@@ -85,7 +86,7 @@ func main() {
 		cmdProviders()
 	case "service":
 		err = cmdService(*cfgPath)
-	case "run", "chat", "doctor", "persona", "eval", "link", "night":
+	case "run", "chat", "tui", "doctor", "persona", "eval", "link", "night":
 		var st *config.Store
 		if st, err = loadConfig(*cfgPath); err != nil {
 			break
@@ -95,6 +96,8 @@ func main() {
 			err = cmdRun(st)
 		case "chat":
 			err = cmdChat(st)
+		case "tui":
+			err = cmdTUI(st)
 		case "doctor":
 			err = cmdDoctor(st, len(args) > 1 && args[1] == "--offline")
 		case "persona":
@@ -393,7 +396,9 @@ func cmdRun(st *config.Store) error {
 	lt := newLocal(st, mem)
 	e.Add(lt)
 	if cfg.WebUI.Enabled {
-		ps := &panel.Server{Chat: lt, Cfg: st, Lib: func() persona.Library { return persona.Library{Dir: st.Abs(st.Get().Persona.Dir)} },
+		ps := &panel.Server{Chat: lt, Command: func(ctx context.Context, name, arg string) (string, bool) {
+			return e.RunCommand(ctx, "local", "local", lt.User(), name, arg)
+		}, Cfg: st, Lib: func() persona.Library { return persona.Library{Dir: st.Abs(st.Get().Persona.Dir)} },
 			Home: e.Home, Ev: e.Ev, Mood: e.Mood, MoodState: e.MoodState, Preview: e.Preview, Version: version, Started: time.Now(),
 			Mem: mem, Tel: e.Tel, Router: router, Tools: func() []string {
 				var n []string

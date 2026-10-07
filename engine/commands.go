@@ -150,6 +150,22 @@ func (e *Engine) Commands() []sdk.Command {
 	}
 }
 
+// RunCommand runs a slash command by name for an account, the way a transport
+// would. arg fills the command's first option. ok is false for an unknown name.
+func (e *Engine) RunCommand(ctx context.Context, transport, userID, userName, name, arg string) (string, bool) {
+	for _, c := range e.Commands() {
+		if c.Name != name {
+			continue
+		}
+		call := sdk.CommandCall{Transport: transport, UserID: userID, UserName: userName, Args: map[string]string{}}
+		if len(c.Options) > 0 && strings.TrimSpace(arg) != "" {
+			call.Args[c.Options[0].Name] = strings.TrimSpace(arg)
+		}
+		return c.Run(ctx, call), true
+	}
+	return "", false
+}
+
 // callTransport is the transport a command came in on.
 func (e *Engine) callTransport(c sdk.CommandCall) string {
 	if c.Transport != "" {

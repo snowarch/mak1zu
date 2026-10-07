@@ -134,7 +134,10 @@ func TestAMessageTheGuardRejectsIsNotSent(t *testing.T) {
 }
 
 func TestLinkingKeepsTheRoute(t *testing.T) {
-	s, ctx := func() (*memory.Store, context.Context) { m, _ := memory.Open(":memory:"); return m, context.Background() }()
+	s, ctx := func() (*memory.Store, context.Context) {
+		m, _ := memory.Open(":memory:")
+		return m, context.Background()
+	}()
 	a, _ := s.Resolve(ctx, "discord", "1", "A")
 	b, _ := s.Resolve(ctx, "cli", "me", "me")
 	s.SetRoute(ctx, a.ID, "discord", "dm9")

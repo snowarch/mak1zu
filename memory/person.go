@@ -76,7 +76,7 @@ func migrate(db *sql.DB) error {
 	for table, cols := range map[string]map[string]string{
 		"people": {"call_me": text, "pronouns": text, "language": text, "tz": text, "role": text, "checkins": text, "quiet": text,
 			"route_transport": text, "route_channel": text, "last_nudge": text, "nudge_streak": num},
-		"memories": {"source": text},
+		"memories":  {"source": text},
 		"reminders": {"transport": text},
 	} {
 		have := map[string]bool{}

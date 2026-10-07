@@ -2,13 +2,22 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"os"
+	"os/signal"
 	"os/user"
+	"path/filepath"
+	"syscall"
 
 	"github.com/snowarch/mak1zu/config"
 	"github.com/snowarch/mak1zu/memory"
 	"github.com/snowarch/mak1zu/persona"
 	"github.com/snowarch/mak1zu/sdk"
 	"github.com/snowarch/mak1zu/transport/local"
+	"github.com/snowarch/mak1zu/tui"
 )
 
 // newLocal builds the local conversation transport: its history is the turns
@@ -47,4 +56,55 @@ func newLocal(st *config.Store, mem *memory.Store) *local.Transport {
 		return out
 	})
 	return lt
+}
+
+// cmdTUI opens the terminal chat: on a running daemon if there is one, else on
+// an engine of its own (Discord stays off there: `mak1zu run` owns Discord).
+func cmdTUI(st *config.Store) error {
+	if !isTerminal(os.Stdin) {
+		return errors.New("the terminal chat needs a terminal; use `mak1zu chat` in a pipe")
+	}
+	cfg := st.Get()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	herName := "Maki"
+	if pa, err := (persona.Library{Dir: st.Abs(cfg.Persona.Dir)}).Load(cfg.Persona.Active); err == nil {
+		herName = pa.Name
+	}
+	if cfg.WebUI.Enabled {
+		host := cfg.WebUI.Host
+		if host == "" || host == "0.0.0.0" {
+			host = "127.0.0.1"
+		}
+		r := &tui.Remote{Base: fmt.Sprintf("http://%s:%d", host, cfg.WebUI.Port), Token: cfg.WebUI.Token}
+		if r.Probe(ctx) {
+			return tui.Run(ctx, r, herName)
+		}
+	}
+
+	unlock, err := singleInstance(filepath.Dir(st.Abs(cfg.Memory.Path)))
+	if err != nil {
+		return fmt.Errorf("she is already running somewhere I cannot reach (%v). If the web panel is off or on another port, turn it on in .makizu/config.json (web_ui) so the terminal can attach", err)
+	}
+	defer unlock()
+	e, mem, _, err := build(st, idle{})
+	if err != nil {
+		return err
+	}
+	defer mem.Close()
+	lt := newLocal(st, mem)
+	e.Add(lt)
+	// the engine's own log would scribble over the screen
+	e.Log = slog.New(slog.NewTextHandler(io.Discard, nil))
+	go func() { _ = e.Run(ctx) }()
+	return tui.Run(ctx, &tui.Embedded{T: lt, Detail: "running on its own: `mak1zu run` keeps her on Discord",
+		Run: func(ctx context.Context, name, arg string) (string, bool) {
+			return e.RunCommand(ctx, "local", "local", lt.User(), name, arg)
+		}}, herName)
+}
+
+func isTerminal(f *os.File) bool {
+	fi, err := f.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
