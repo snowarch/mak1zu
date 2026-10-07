@@ -27,6 +27,7 @@ import (
 	"github.com/snowarch/mak1zu/persona"
 	"github.com/snowarch/mak1zu/provider"
 	"github.com/snowarch/mak1zu/sdk"
+	"github.com/snowarch/mak1zu/tools"
 	"github.com/snowarch/mak1zu/transport/cli"
 	"github.com/snowarch/mak1zu/transport/discord"
 )
@@ -59,6 +60,7 @@ func main() {
 	flag.Usage = func() { fmt.Fprintf(os.Stderr, usage, version) }
 	flag.Parse()
 	provider.UserAgent = "mak1zu/" + version + " (+https://github.com/snowarch/mak1zu)"
+	tools.UserAgent = provider.UserAgent
 	args := flag.Args()
 	if len(args) == 0 {
 		flag.Usage()

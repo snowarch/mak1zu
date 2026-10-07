@@ -132,21 +132,7 @@ func Builtins(d Deps) []sdk.Tool {
 				return d.SelfReview(env.ChannelID), nil
 			}})
 	}
-	if d.SearxURL != nil {
-		t = append(t, sdk.ToolFunc{S: sdk.ToolSpec{Name: "web_search", Heavy: true, Description: "Search the web (via the owner's SearXNG instance) for current information.",
-			Schema: Schema([]string{"query"}, map[string][2]string{"query": {"string", "search query"}})},
-			F: func(ctx context.Context, raw json.RawMessage, _ *sdk.CallEnv) (string, error) {
-				base := d.SearxURL()
-				if base == "" {
-					return "", errors.New("web search is not configured (set search.searxng_url)")
-				}
-				a, err := args[struct{ Query string }](raw)
-				if err != nil {
-					return "", err
-				}
-				return searx(ctx, base, a.Query)
-			}})
-	}
+	t = append(t, WebSearch(d.SearxURL))
 	return t
 }
 

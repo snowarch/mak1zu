@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -138,5 +139,76 @@ func TestReactionGIFOnlyNekosHostAndKnownCategories(t *testing.T) {
 	got = ""
 	if _, err := tool.Call(context.Background(), json.RawMessage(`{"category":"hug"}`), env); err == nil || got != "" {
 		t.Fatal("posted a link from a foreign host")
+	}
+}
+
+func TestWallpaperIsSafeForWorkAndOnlyFromWallhaven(t *testing.T) {
+	var query string
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		io.WriteString(w, `{"data":[
+			{"path":"https://evil.example/x.jpg","url":"https://wallhaven.cc/w/a","resolution":"1x1","purity":"sfw"},
+			{"path":"https://w.wallhaven.cc/full/b/wallhaven-b.jpg","url":"https://wallhaven.cc/w/b","resolution":"1920x1080","purity":"sketchy"},
+			{"path":"https://w.wallhaven.cc/full/c/wallhaven-c.jpg","url":"https://wallhaven.cc/w/c","resolution":"2560x1440","purity":"sfw"}]}`)
+	}))
+	defer s.Close()
+	old := wallhavenURL
+	wallhavenURL = s.URL
+	defer func() { wallhavenURL = old }()
+	var got string
+	env := &sdk.CallEnv{AttachLink: func(u string) { got = u }}
+	out, err := Wallpaper().Call(context.Background(), json.RawMessage(`{"query":"anime city night\n & purity=111"}`), env)
+	if err != nil || got != "https://w.wallhaven.cc/full/c/wallhaven-c.jpg" {
+		t.Fatalf("picked %q: %v", got, err)
+	}
+	params, _ := url.ParseQuery(query)
+	if len(params["purity"]) != 1 || params.Get("purity") != "100" || params.Get("q") != "anime city night & purity=111" {
+		t.Fatalf("the model could change the safety filter or smuggle a parameter: %v", params)
+	}
+	if strings.Contains(out, "http://") || !strings.Contains(out, "Do not paste") {
+		t.Fatalf("tool result: %s", out)
+	}
+	// nothing usable: say so, post nothing
+	got = ""
+	empty := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, `{"data":[]}`) }))
+	defer empty.Close()
+	wallhavenURL = empty.URL
+	if _, err := Wallpaper().Call(context.Background(), json.RawMessage(`{"query":"zzzz"}`), env); err == nil || got != "" {
+		t.Fatal("posted something with no result")
+	}
+	if _, err := Wallpaper().Call(context.Background(), json.RawMessage(`{"query":"   "}`), env); err == nil {
+		t.Fatal("empty query accepted")
+	}
+}
+
+func TestImageSearchOnlyWikimediaPicturesAndNothingInvented(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Query().Get("gsrsearch"), "orange cat") || r.URL.Query().Get("gsrnamespace") != "6" {
+			t.Errorf("bad query: %v", r.URL.Query())
+		}
+		io.WriteString(w, `{"query":{"pages":{
+			"1":{"index":1,"title":"File:Evil.jpg","imageinfo":[{"thumburl":"https://evil.example/x.jpg","mime":"image/jpeg"}]},
+			"2":{"index":2,"title":"File:A video.webm","imageinfo":[{"thumburl":"https://upload.wikimedia.org/a.webm","mime":"video/webm"}]},
+			"3":{"index":3,"title":"File:Orange cat.jpg","imageinfo":[{"thumburl":"https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Orange_cat.jpg/1280px-Orange_cat.jpg?utm_source=commons&utm_campaign=imageinfo","mime":"image/jpeg"}]}}}}`)
+	}))
+	defer s.Close()
+	old := commonsURL
+	commonsURL = s.URL
+	defer func() { commonsURL = old }()
+	var got string
+	env := &sdk.CallEnv{AttachLink: func(u string) { got = u }}
+	out, err := ImageSearch().Call(context.Background(), json.RawMessage(`{"query":"orange cat"}`), env)
+	if err != nil || got != "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Orange_cat.jpg/1280px-Orange_cat.jpg" { // tracking query is dropped
+		t.Fatalf("picked %q: %v", got, err)
+	}
+	if !strings.Contains(out, "Orange cat.jpg") || strings.Contains(out, "http") || !strings.Contains(out, "cannot see") {
+		t.Fatalf("tool result: %s", out)
+	}
+	got = ""
+	empty := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, `{"batchcomplete":""}`) }))
+	defer empty.Close()
+	commonsURL = empty.URL
+	if _, err := ImageSearch().Call(context.Background(), json.RawMessage(`{"query":"zzz"}`), env); err == nil || got != "" {
+		t.Fatal("posted something with no result")
 	}
 }

@@ -46,8 +46,16 @@ func (r *Registry) Get(name string) (sdk.Tool, bool) {
 	return t, ok
 }
 
-// Specs returns the specs offered for a turn. Heavy tools are withheld on
-// casual turns so chatter never pays for (or triggers) research.
+// IsHeavy reports whether a registered tool is marked slow or expensive.
+func (r *Registry) IsHeavy(name string) bool {
+	t, ok := r.Get(name)
+	return ok && t.Spec().Heavy
+}
+
+// Specs returns the specs offered for a turn. With allowHeavy false the heavy
+// ones are left out; the engine always passes true, because whether she can
+// search, make a file or fetch an image must never depend on which words the
+// request happened to contain.
 func (r *Registry) Specs(allowHeavy bool) []sdk.ToolSpec {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
