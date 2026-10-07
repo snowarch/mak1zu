@@ -2,12 +2,14 @@
 
 From nothing to her answering in a Discord server. About ten minutes, most of it clicking around Discord's developer portal.
 
+Fastest: give your coding agent the prompt at the top of the [README](../README.md#set-it-up-with-your-ai-two-minutes). It follows [AGENTS.md](../AGENTS.md), which is these same steps written for it. The rest of this page is the by-hand version.
+
 ## 1. Install
 
 You need Go 1.27 or newer. The binary is one static file with no C dependencies; any Linux distro runs it.
 
 ```bash
-git clone https://github.com/snowarch/mak1zu && cd mak1zu
+git clone https://github.com/snowarch/mak1zu ~/src/mak1zu && cd ~/src/mak1zu
 make install                  # builds and copies mak1zu to ~/.local/bin
 ```
 
@@ -55,6 +57,15 @@ mak1zu run
 Open `http://127.0.0.1:8787`. The first-run checklist on the **Live** tab shows what is still missing, and once the token is in it builds the **invite link** for you. Open it, pick a server you manage, authorize. She appears online.
 
 Everything in the panel applies live and writes `config.json` for you: models, rooms, behavior dials, her personality file, house rules. Secrets are write-only there.
+
+## Optional: let her get to know you
+
+Both are off until you turn them on (panel **Dials**, or `config.json`).
+
+- `memory.night_shift`: once a day, at `memory.night_hour`, she goes over the last conversations with the people she actually talked to, tidies what she knows and writes a short private diary (`/diary`). A few model calls a night. Try it without storing anything: `mak1zu night --dry-run`.
+- `behavior.proactive`: she may write first, only in a private chat you started, with quiet hours, a daily cap and back-off when ignored. Saying "stop" turns it off for you.
+
+To be the same person in Discord and in the terminal, run `/link` in Discord and pass the code to `mak1zu link CODE`.
 
 ## 6. Keep her running
 

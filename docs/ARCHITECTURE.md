@@ -6,7 +6,7 @@ thinks with) and **Plugin** (what she can do). Everything else is replaceable.
 
 ```
                 ┌────────────────────────── cmd/mak1zu ──────────────────────────┐
- Discord / CLI  │                                                                  │
+ Discord / TUI  │                                                                  │
  (sdk.Transport)│  Handle(msg)                                                     │
       │         │    │ dedupe → Policy.Decide → burst collapse → channel lock      │
       ▼         │    ▼                                                             │
@@ -40,7 +40,11 @@ thinks with) and **Plugin** (what she can do). Everything else is replaceable.
 | `mcpclient` | MCP servers → `sdk.Tool` (allowlist per server, namespaced names, child env scrubbed of companion secrets). | Sandboxing the servers: they are your code, review them. |
 | `panel` | Embedded web UI, JSON API, CSRF/rebinding guards. | Persisting anything but config and persona files. |
 | `transport/discord` | discordgo ⇄ `sdk.Transport`, emoji resolution at send time, mention neutralisation. | Whether to answer. |
-| `transport/cli` | Terminal chat for persona and plugin development. | |
+| `transport/cli` | Plain line-by-line chat for scripts and persona work (`mak1zu chat`). | |
+| `transport/local` | The person at the machine: terminal chat and the panel's Chat tab share it. | Discord accounts (they join through `/link`). |
+| `tui` | The terminal chat (`mak1zu`): attaches to a running daemon or starts her itself; first-run questions. | Anything the engine decides. |
+| `voice`, `distill`, `pack` | Measurable voice targets and `eval --gate`; learning a character from chat exports; characters as shareable folders. | Prompt composition (`persona`). |
+| `internal/events`, `internal/telemetry` | The live feed behind the panel, and counters. | |
 
 ## Every turn has a budget
 
