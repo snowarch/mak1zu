@@ -67,7 +67,7 @@ func (t *Transport) Run(ctx context.Context, h sdk.Handler) error {
 func (t *Transport) convert(m *discordgo.Message) sdk.Message {
 	self := t.Self()
 	out := sdk.Message{
-		ID: m.ID, ChannelID: m.ChannelID, GuildID: m.GuildID, AuthorID: m.Author.ID, AuthorName: displayName(m),
+		Transport: "discord", ID: m.ID, ChannelID: m.ChannelID, GuildID: m.GuildID, AuthorID: m.Author.ID, AuthorName: displayName(m),
 		Content: t.renderMentions(m), IsDM: m.GuildID == "", IsBot: m.Author.Bot, WebhookID: m.WebhookID, Time: m.Timestamp,
 	}
 	for _, u := range m.Mentions {

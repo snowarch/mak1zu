@@ -43,7 +43,7 @@ func (e *Engine) FireReminders(ctx context.Context, now time.Time) {
 				text = strings.TrimSpace(resp.Text)
 			}
 		}
-		_ = e.Tr.Send(ctx, r.ChannelID, sdk.Reply{Text: text})
+		_ = e.tr(r.Transport).Send(ctx, r.ChannelID, sdk.Reply{Text: text})
 	}
 }
 
@@ -89,12 +89,12 @@ Ignore jokes, opinions about others, anything uncertain. Both arrays empty if no
 	facts, threads := parseExtraction(resp.Text)
 	for _, f := range facts[:min(len(facts), 4)] {
 		if len([]rune(f)) >= 12 {
-			_, _ = e.Mem.RememberFrom(ctx, pa.ID, memory.Semantic, per.ID, e.Tr.Name(), strings.TrimSpace(f), 0.55, "auto")
+			_, _ = e.Mem.RememberFrom(ctx, pa.ID, memory.Semantic, per.ID, m.Transport, strings.TrimSpace(f), 0.55, "auto")
 		}
 	}
 	for _, t := range threads[:min(len(threads), 2)] {
 		due, _ := tools.ParseDue(t.Due)
-		_, _ = e.Mem.AddThread(ctx, per.ID, e.Tr.Name(), t.Text, due)
+		_, _ = e.Mem.AddThread(ctx, per.ID, m.Transport, t.Text, due)
 	}
 }
 

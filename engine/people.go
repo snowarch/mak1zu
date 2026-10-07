@@ -13,8 +13,8 @@ import (
 // relationships and reminders hang off the person; an account is only a way to
 // reach them. Owner is a role on a person.
 
-func (e *Engine) isLocal() bool {
-	l, ok := e.Tr.(sdk.Local)
+func (e *Engine) isLocal(transport string) bool {
+	l, ok := e.tr(transport).(sdk.Local)
 	return ok && l.Local()
 }
 
@@ -38,7 +38,7 @@ func (e *Engine) lookupPerson(ctx context.Context, m sdk.Message) (memory.Person
 	if e.isPeer(m) {
 		return synthetic(m), true
 	}
-	p, ok, err := e.Mem.Lookup(ctx, e.Tr.Name(), m.AuthorID)
+	p, ok, err := e.Mem.Lookup(ctx, m.Transport, m.AuthorID)
 	if err != nil {
 		e.Log.Warn("person lookup", "err", err)
 	}
@@ -54,9 +54,9 @@ func (e *Engine) standing(ctx context.Context, m sdk.Message, seen memory.Person
 		return Who{}
 	}
 	cfgOwner := e.Cfg.Get().Discord.OwnerID
-	isCfg := cfgOwner != "" && e.Tr.Name() == "discord" && m.AuthorID == cfgOwner
+	isCfg := cfgOwner != "" && m.Transport == "discord" && m.AuthorID == cfgOwner
 	has := e.Mem.HasOwner(ctx) || cfgOwner != ""
-	if e.isLocal() && !has {
+	if e.isLocal(m.Transport) && !has {
 		return Who{HasOwner: true, IsOwner: true}
 	}
 	return Who{HasOwner: has, IsOwner: seen.IsOwner() || isCfg}
@@ -68,13 +68,13 @@ func (e *Engine) person(ctx context.Context, m sdk.Message) memory.Person {
 	if e.isPeer(m) {
 		return synthetic(m)
 	}
-	return e.account(ctx, m.AuthorID, m.AuthorName)
+	return e.account(ctx, m.Transport, m.AuthorID, m.AuthorName)
 }
 
 // account is person() for callers that have an account but no message
 // (slash commands).
-func (e *Engine) account(ctx context.Context, external, display string) memory.Person {
-	p, err := e.Mem.Resolve(ctx, e.Tr.Name(), external, display)
+func (e *Engine) account(ctx context.Context, transport, external, display string) memory.Person {
+	p, err := e.Mem.Resolve(ctx, transport, external, display)
 	if err != nil {
 		e.Log.Error("resolve person", "err", err)
 		return memory.Person{ID: external, Name: display}
@@ -83,9 +83,9 @@ func (e *Engine) account(ctx context.Context, external, display string) memory.P
 		return p
 	}
 	claim := false
-	if o := e.Cfg.Get().Discord.OwnerID; o != "" && e.Tr.Name() == "discord" && external == o {
+	if o := e.Cfg.Get().Discord.OwnerID; o != "" && transport == "discord" && external == o {
 		claim = true
-	} else if e.isLocal() && !e.Mem.HasOwner(ctx) {
+	} else if e.isLocal(transport) && !e.Mem.HasOwner(ctx) {
 		claim = true
 	}
 	if claim {
@@ -128,7 +128,7 @@ func (e *Engine) profileNotes(per memory.Person, rel memory.Relationship, m sdk.
 	}
 	// Ask once, lightly, only where it is not an interrogation: a private
 	// chat (or the owner's own machine), never a room full of strangers.
-	if per.CallMe == "" && (m.IsDM || e.isLocal()) && rel.Interactions < 6 && !e.isPeer(m) {
+	if per.CallMe == "" && (m.IsDM || e.isLocal(m.Transport)) && rel.Interactions < 6 && !e.isPeer(m) {
 		out = append(out, fmt.Sprintf("You do not know what %s wants to be called (you only have their account name). When it fits, ask once, casually, what they would like you to call them; when they answer, save it with set_profile. Do not ask again if they brush it off.", per.Name))
 	}
 	return out

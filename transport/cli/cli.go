@@ -71,7 +71,7 @@ func (t *Transport) Run(ctx context.Context, h sdk.Handler) error {
 		}
 		t.mu.Lock()
 		t.n++
-		m := sdk.Message{ID: fmt.Sprint("u", t.n), ChannelID: "cli", AuthorID: "user", AuthorName: t.User, Content: line, IsDM: true, Time: time.Now()}
+		m := sdk.Message{Transport: "cli", ID: fmt.Sprint("u", t.n), ChannelID: "cli", AuthorID: "user", AuthorName: t.User, Content: line, IsDM: true, Time: time.Now()}
 		t.hist = append(t.hist, m)
 		t.mu.Unlock()
 		h(ctx, m)

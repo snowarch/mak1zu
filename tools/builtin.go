@@ -142,7 +142,7 @@ func Builtins(d Deps) []sdk.Tool {
 				if err != nil {
 					return "", err
 				}
-				if _, err := d.Mem.AddReminder(ctx, env.Speaker.ID, env.ChannelID, a.Content, due); err != nil {
+				if _, err := d.Mem.AddReminderOn(ctx, env.Speaker.ID, env.Transport, env.ChannelID, a.Content, due); err != nil {
 					return "", err
 				}
 				return "reminder set for " + due.Local().Format("Mon 2 Jan 15:04"), nil

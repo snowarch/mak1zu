@@ -157,7 +157,7 @@ func TestAccountClaimNeverStealsOwner(t *testing.T) {
 	disc, _ := e.Mem.Resolve(ctx, "discord", "boss", "boss")
 	e.Mem.ClaimOwner(ctx, disc.ID)
 	e.Tr = &localTransport{}
-	if p := e.account(ctx, "user", "visitor"); p.IsOwner() {
+	if p := e.account(ctx, "cli", "user", "visitor"); p.IsOwner() {
 		t.Fatal("local account claimed the owner role while another owner exists")
 	}
 }

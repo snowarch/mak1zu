@@ -65,12 +65,12 @@ func (e *Engine) ledgerLines(ctx context.Context, personaID string, per memory.P
 
 // ledgerView is what /memories shows: everything she holds about this person,
 // so it can be read and pruned. Nothing here is hidden from them.
-func (e *Engine) ledgerView(ctx context.Context, personaID string, per memory.Person) string {
+func (e *Engine) ledgerView(ctx context.Context, personaID, transport string, per memory.Person) string {
 	var b strings.Builder
 	now := time.Now()
 	ms, _ := e.Mem.Recall(ctx, personaID, per.ID, "", 10)
 	for _, m := range ms {
-		fmt.Fprintf(&b, "#%d %s\n", m.ID, describeMemory(m, e.Tr.Name(), now))
+		fmt.Fprintf(&b, "#%d %s\n", m.ID, describeMemory(m, transport, now))
 	}
 	if ts, _ := e.Mem.OpenThreads(ctx, per.ID, 12); len(ts) > 0 {
 		b.WriteString("\nopen threads (forget with `thread N`):\n")

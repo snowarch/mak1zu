@@ -46,7 +46,7 @@ func (t *Transport) RegisterCommands(ctx context.Context, cmds []sdk.Command) er
 		if u == nil {
 			return
 		}
-		call := sdk.CommandCall{UserID: u.ID, UserName: u.Username, ChannelID: i.ChannelID, Args: map[string]string{}}
+		call := sdk.CommandCall{Transport: "discord", UserID: u.ID, UserName: u.Username, ChannelID: i.ChannelID, Args: map[string]string{}}
 		for _, o := range data.Options {
 			call.Args[o.Name] = o.StringValue()
 		}

@@ -13,7 +13,7 @@ import (
 // the transport, so every platform gets the same rule.
 func (e *Engine) Commands() []sdk.Command {
 	owner := func(ctx context.Context, c sdk.CommandCall) bool {
-		if e.account(ctx, c.UserID, c.UserName).IsOwner() {
+		if e.account(ctx, e.callTransport(c), c.UserID, c.UserName).IsOwner() {
 			return true
 		}
 		return !e.Mem.HasOwner(ctx) && e.Cfg.Get().Discord.OwnerID == "" // nobody holds the role: single-user install
@@ -54,19 +54,19 @@ func (e *Engine) Commands() []sdk.Command {
 					return "give me a sentence (8 to 400 characters)"
 				}
 				pa := e.Cfg.Get().Persona.Active
-				if _, err := e.Mem.RememberFrom(ctx, pa, memory.Semantic, e.account(ctx, c.UserID, c.UserName).ID, e.Tr.Name(), note, 0.7, "command"); err != nil {
+				if _, err := e.Mem.RememberFrom(ctx, pa, memory.Semantic, e.account(ctx, e.callTransport(c), c.UserID, c.UserName).ID, e.callTransport(c), note, 0.7, "command"); err != nil {
 					return "could not save that"
 				}
 				return "noted"
 			}},
 		{Name: "memories", Description: "Show everything she holds about you: memories, open threads, running bits (only you can see this)",
 			Run: func(ctx context.Context, c sdk.CommandCall) string {
-				return e.ledgerView(ctx, e.Cfg.Get().Persona.Active, e.account(ctx, c.UserID, c.UserName))
+				return e.ledgerView(ctx, e.Cfg.Get().Persona.Active, e.callTransport(c), e.account(ctx, e.callTransport(c), c.UserID, c.UserName))
 			}},
 		{Name: "diary", Description: "Read what she wrote about you (only you can see this), or `clear` to delete it",
 			Options: []sdk.CommandOption{{Name: "what", Description: "`clear` to delete everything she wrote about you", Required: false}},
 			Run: func(ctx context.Context, c sdk.CommandCall) string {
-				per := e.account(ctx, c.UserID, c.UserName)
+				per := e.account(ctx, e.callTransport(c), c.UserID, c.UserName)
 				if strings.EqualFold(strings.TrimSpace(c.Args["what"]), "clear") {
 					_ = e.Mem.ClearDiary(ctx, per.ID)
 					return "deleted"
@@ -84,7 +84,7 @@ func (e *Engine) Commands() []sdk.Command {
 		{Name: "callme", Description: "Tell her what to call you, on every platform you use",
 			Options: []sdk.CommandOption{{Name: "name", Description: "what she should call you (empty to reset)", Required: false}},
 			Run: func(ctx context.Context, c sdk.CommandCall) string {
-				per := e.account(ctx, c.UserID, c.UserName)
+				per := e.account(ctx, e.callTransport(c), c.UserID, c.UserName)
 				n := strings.TrimSpace(c.Args["name"])
 				if err := e.Mem.SetProfile(ctx, per.ID, "call_me", n); err != nil {
 					return err.Error()
@@ -97,9 +97,9 @@ func (e *Engine) Commands() []sdk.Command {
 		{Name: "link", Description: "Join this account to you elsewhere (terminal, other platform): run with no code to get one, or paste a code",
 			Options: []sdk.CommandOption{{Name: "code", Description: "a code from another platform", Required: false}},
 			Run: func(ctx context.Context, c sdk.CommandCall) string {
-				per := e.account(ctx, c.UserID, c.UserName)
+				per := e.account(ctx, e.callTransport(c), c.UserID, c.UserName)
 				if code := strings.TrimSpace(c.Args["code"]); code != "" {
-					p, err := e.Mem.Link(ctx, e.Tr.Name(), c.UserID, c.UserName, code)
+					p, err := e.Mem.Link(ctx, e.callTransport(c), c.UserID, c.UserName, code)
 					if err != nil {
 						return err.Error()
 					}
@@ -116,7 +116,7 @@ func (e *Engine) Commands() []sdk.Command {
 			Run: func(ctx context.Context, c sdk.CommandCall) string {
 				w := strings.TrimSpace(strings.ToLower(c.Args["what"]))
 				if w == "all" {
-					if err := e.Mem.ForgetUser(ctx, e.account(ctx, c.UserID, c.UserName).ID); err != nil {
+					if err := e.Mem.ForgetUser(ctx, e.account(ctx, e.callTransport(c), c.UserID, c.UserName).ID); err != nil {
 						return "could not erase"
 					}
 					return "everything about you is gone"
@@ -126,7 +126,7 @@ func (e *Engine) Commands() []sdk.Command {
 					if err != nil {
 						return "give me the number, like `" + kind + " 3`"
 					}
-					p := e.account(ctx, c.UserID, c.UserName)
+					p := e.account(ctx, e.callTransport(c), c.UserID, c.UserName)
 					var done bool
 					if kind == "thread" {
 						done, _ = e.Mem.CloseThread(ctx, p.ID, n)
@@ -142,12 +142,20 @@ func (e *Engine) Commands() []sdk.Command {
 				if err != nil {
 					return "give me a memory number, `thread N`, `bit N` or `all`"
 				}
-				if ok, _ := e.Mem.Forget(ctx, e.account(ctx, c.UserID, c.UserName).ID, id); ok {
+				if ok, _ := e.Mem.Forget(ctx, e.account(ctx, e.callTransport(c), c.UserID, c.UserName).ID, id); ok {
 					return "forgotten"
 				}
 				return "no such memory of yours"
 			}},
 	}
+}
+
+// callTransport is the transport a command came in on.
+func (e *Engine) callTransport(c sdk.CommandCall) string {
+	if c.Transport != "" {
+		return c.Transport
+	}
+	return e.Tr.Name()
 }
 
 func (e *Engine) personaLib() personaLibrary {

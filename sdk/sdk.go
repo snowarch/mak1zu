@@ -19,6 +19,7 @@ type Attachment struct {
 
 // Message is a transport-neutral inbound chat message.
 type Message struct {
+	Transport   string // which transport delivered it; set by the transport, defaulted by the engine
 	ID          string
 	ChannelID   string
 	ChannelName string
@@ -169,6 +170,7 @@ type CommandOption struct {
 
 // CommandCall is an invocation of a platform command.
 type CommandCall struct {
+	Transport string
 	UserID    string // the platform account; the engine maps it to a person
 	UserName  string
 	ChannelID string

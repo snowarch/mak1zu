@@ -60,6 +60,20 @@ func nudgeWhy(per memory.Person, here string, lastTalk, now time.Time) string {
 	return ""
 }
 
+// knownTransport is name if a transport by that name is attached, otherwise
+// "" (so a route on a transport that is not running never matches).
+func (e *Engine) knownTransport(name string) string {
+	if name == e.Tr.Name() {
+		return name
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if _, ok := e.extra[name]; ok {
+		return name
+	}
+	return ""
+}
+
 func (e *Engine) presenceLoop(ctx context.Context) {
 	wait := presenceFirst
 	for {
@@ -92,7 +106,7 @@ func (e *Engine) ReachOut(ctx context.Context, now time.Time) int {
 			break
 		}
 		last, _ := e.Mem.LastTurn(ctx, per.ID)
-		if why := nudgeWhy(per, e.Tr.Name(), last, now); why != "" {
+		if why := nudgeWhy(per, e.knownTransport(per.RouteTransport), last, now); why != "" {
 			continue
 		}
 		us, _ := e.Mem.PendingUnsaid(ctx, pa.ID, per.ID, now)
@@ -103,7 +117,7 @@ func (e *Engine) ReachOut(ctx context.Context, now time.Time) int {
 		if text == "" {
 			continue
 		}
-		if err := e.Tr.Send(ctx, per.RouteChannel, sdk.Reply{Text: text}); err != nil {
+		if err := e.tr(per.RouteTransport).Send(ctx, per.RouteChannel, sdk.Reply{Text: text}); err != nil {
 			e.Log.Warn("presence send", "err", err)
 			continue
 		}
@@ -119,7 +133,7 @@ func (e *Engine) ReachOut(ctx context.Context, now time.Time) int {
 func (e *Engine) composeNudge(ctx context.Context, pa persona.Persona, per memory.Person, thing string, now time.Time) string {
 	cfg := e.Cfg.Get()
 	pctx := persona.Context{
-		Now: now.Format("Monday 2 January 2006, 15:04 MST"), Platform: e.Tr.Name(), Speaker: per.Display(),
+		Now: now.Format("Monday 2 January 2006, 15:04 MST"), Platform: per.RouteTransport, Speaker: per.Display(),
 		Place: "a private DM with " + per.Display(), LanguageHint: languageHint(cfg.Language),
 		Extra: append(e.profileNotes(per, memory.Relationship{Interactions: 99}, sdk.Message{IsDM: true}),
 			fmt.Sprintf("You are starting this conversation yourself, unprompted. Say, in one or two short lines in your own voice, this thing you have been meaning to bring up: %s\nNo greeting ritual, no \"just checking in\", no apology for writing first, no other questions.", thing)),

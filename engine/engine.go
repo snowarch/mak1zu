@@ -45,6 +45,7 @@ type Engine struct {
 	Inc   *Incidents
 	Log   *slog.Logger
 
+	extra map[string]sdk.Transport // transports besides Tr, by name
 	mood  *persona.Mood
 	hooks []sdk.Hooks
 
@@ -115,12 +116,52 @@ func (e *Engine) personaCfg() (persona.Persona, error) {
 	return lib.Load(c.Persona.Active)
 }
 
-// Run blocks, serving the transport until ctx ends.
+// Add attaches another transport. Every transport reaches the same engine, so
+// one person talking from two of them is one conversation partner with one memory.
+func (e *Engine) Add(t sdk.Transport) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.extra == nil {
+		e.extra = map[string]sdk.Transport{}
+	}
+	e.extra[t.Name()] = t
+}
+
+// tr finds a transport by name; an unknown or empty name is the primary one.
+func (e *Engine) tr(name string) sdk.Transport {
+	if name == "" || name == e.Tr.Name() {
+		return e.Tr
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if t, ok := e.extra[name]; ok {
+		return t
+	}
+	return e.Tr
+}
+
+// Run blocks, serving every transport until ctx ends or the primary one stops.
 func (e *Engine) Run(ctx context.Context) error {
 	if ch, ok := e.Tr.(sdk.CommandHost); ok && e.Cfg.Get().Discord.RegisterCommands {
 		if err := ch.RegisterCommands(ctx, e.Commands()); err != nil {
 			e.Log.Warn("commands", "err", err)
 		}
+	}
+	e.mu.Lock()
+	others := make([]sdk.Transport, 0, len(e.extra))
+	for _, t := range e.extra {
+		others = append(others, t)
+	}
+	e.mu.Unlock()
+	for _, t := range others {
+		go func(t sdk.Transport) {
+			if err := t.Run(ctx, func(ctx context.Context, m sdk.Message) {
+				m.Transport = t.Name()
+				go e.Handle(ctx, m)
+			}); err != nil && ctx.Err() == nil {
+				e.Log.Warn("transport stopped", "name", t.Name(), "err", err)
+			}
+		}(t)
 	}
 	go e.reminderLoop(ctx)
 	go e.maintenanceLoop(ctx)
@@ -143,7 +184,10 @@ func (e *Engine) lock(ch string) *sync.Mutex {
 
 // Handle processes one inbound message end to end.
 func (e *Engine) Handle(ctx context.Context, m sdk.Message) {
-	self := e.Tr.Self()
+	if m.Transport == "" {
+		m.Transport = e.Tr.Name()
+	}
+	self := e.tr(m.Transport).Self()
 	if m.AuthorID == self.ID || m.Content == "" && len(m.Attachments) == 0 {
 		return
 	}
@@ -222,7 +266,7 @@ func (e *Engine) Handle(ctx context.Context, m sdk.Message) {
 			e.Sleep(ctx, 2*time.Second)
 			continue
 		}
-		_ = e.Tr.Send(ctx, m.ChannelID, sdk.Reply{Text: FailureReply(cause, m.Content), ReplyToID: m.ID})
+		_ = e.tr(m.Transport).Send(ctx, m.ChannelID, sdk.Reply{Text: FailureReply(cause, m.Content), ReplyToID: m.ID})
 		return
 	}
 }
@@ -267,7 +311,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(ctx, 150*time.Second)
 	defer cancel()
-	e.Tr.Typing(ctx, m.ChannelID)
+	e.tr(m.Transport).Typing(ctx, m.ChannelID)
 
 	// Memory is scoped to the speaker. Never mix people.
 	_ = e.Mem.Touch(ctx, pa.ID, per.ID, m.AuthorName)
@@ -276,18 +320,18 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	name := per.Display() // the name they chose, else their platform name
 	var memText []string
 	for _, x := range mems {
-		memText = append(memText, describeMemory(x, e.Tr.Name(), time.Now()))
+		memText = append(memText, describeMemory(x, m.Transport, time.Now()))
 	}
-	private := m.IsDM || e.isLocal() // what is about one person's life is only raised in private
+	private := m.IsDM || e.isLocal(m.Transport) // what is about one person's life is only raised in private
 	threads, bits := e.ledgerLines(ctx, pa.ID, per, private)
 	onMind, mindIDs := e.mindLines(ctx, pa.ID, per, private)
 	_ = e.Mem.Answered(ctx, per.ID) // they talked to her: any unanswered nudge is answered
 	if private {
-		_ = e.Mem.SetRoute(ctx, per.ID, e.Tr.Name(), m.ChannelID)
+		_ = e.Mem.SetRoute(ctx, per.ID, m.Transport, m.ChannelID)
 	}
 
 	pctx := persona.Context{
-		Now: time.Now().Format("Monday 2 January 2006, 15:04 MST"), Platform: e.Tr.Name(),
+		Now: time.Now().Format("Monday 2 January 2006, 15:04 MST"), Platform: m.Transport,
 		Speaker: name, Relationship: rel.Describe(), Memories: memText, Threads: threads, Bits: bits, OnMind: onMind,
 		LanguageHint: languageHint(cfg.Language),
 	}
@@ -299,7 +343,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	} else {
 		pctx.Place = strings.TrimSpace("#" + m.ChannelName + " in " + m.GuildName)
 	}
-	if ep, ok := e.Tr.(sdk.EmojiProvider); ok {
+	if ep, ok := e.tr(m.Transport).(sdk.EmojiProvider); ok {
 		pctx.Emojis = ep.EmojiNames(m.GuildID)
 	}
 	pctx.Rules = e.Home().Directives(m.GuildID, m.ChannelID)
@@ -346,7 +390,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	var reactions []string
 	var links []string
 	env := &sdk.CallEnv{
-		Transport: e.Tr.Name(), Speaker: sdk.Identity{ID: per.ID, Name: name}, ChannelID: m.ChannelID, GuildID: m.GuildID, IsDM: m.IsDM, Persona: pa.ID,
+		Transport: m.Transport, Speaker: sdk.Identity{ID: per.ID, Name: name}, ChannelID: m.ChannelID, GuildID: m.GuildID, IsDM: m.IsDM, Persona: pa.ID,
 		QueueFile: func(f sdk.File) { queued = append(queued, f) },
 		React:     func(x string) { reactions = append(reactions, x) },
 		AttachLink: func(u string) {
@@ -465,7 +509,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	e.audit(m, final, toolsUsed, len(queued))
 	e.deliver(ctx, m, reason, pa, final, queued, reactions)
 	for _, l := range links {
-		_ = e.Tr.Send(ctx, m.ChannelID, sdk.Reply{Text: l})
+		_ = e.tr(m.Transport).Send(ctx, m.ChannelID, sdk.Reply{Text: l})
 	}
 
 	e.mu.Lock()
@@ -520,11 +564,11 @@ func (e *Engine) history(ctx context.Context, m sdk.Message, n int) []provider.M
 	if n <= 0 {
 		n = 20
 	}
-	hist, err := e.Tr.History(ctx, m.ChannelID, n+1)
+	hist, err := e.tr(m.Transport).History(ctx, m.ChannelID, n+1)
 	if err != nil {
 		return nil
 	}
-	self := e.Tr.Self().ID
+	self := e.tr(m.Transport).Self().ID
 	var out []provider.Message
 	for _, h := range hist {
 		if h.ID == m.ID || h.Content == "" {
@@ -555,7 +599,7 @@ func (e *Engine) deliver(ctx context.Context, m sdk.Message, reason Reason, pa p
 	}
 	for i, c := range chunks {
 		if c != "" {
-			e.Tr.Typing(ctx, m.ChannelID)
+			e.tr(m.Transport).Typing(ctx, m.ChannelID)
 			d := min(float64(len(c))*t.TypingPerCh, t.TypingMax)
 			e.Sleep(ctx, time.Duration(d*float64(time.Second)))
 		}
@@ -566,7 +610,7 @@ func (e *Engine) deliver(ctx context.Context, m sdk.Message, reason Reason, pa p
 				r.ReplyToID = m.ID // reactions attach to the triggering message
 			}
 		}
-		if err := e.Tr.Send(ctx, m.ChannelID, r); err != nil {
+		if err := e.tr(m.Transport).Send(ctx, m.ChannelID, r); err != nil {
 			e.Log.Warn("send failed", "err", err)
 			return
 		}

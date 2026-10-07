@@ -477,13 +477,19 @@ func (s *Store) Stats(ctx context.Context) map[string]int {
 type Reminder struct {
 	ID        int64
 	UserID    string
+	Transport string
 	ChannelID string
 	Content   string
 	Due       time.Time
 }
 
 func (s *Store) AddReminder(ctx context.Context, userID, channelID, content string, due time.Time) (int64, error) {
-	r, err := s.db.ExecContext(ctx, `INSERT INTO reminders(user_id,channel_id,content,due) VALUES(?,?,?,?)`, userID, channelID, content, due.UTC().Format(time.RFC3339))
+	return s.AddReminderOn(ctx, userID, "", channelID, content, due)
+}
+
+// AddReminderOn remembers which transport the reminder was set on, so it fires there.
+func (s *Store) AddReminderOn(ctx context.Context, userID, transport, channelID, content string, due time.Time) (int64, error) {
+	r, err := s.db.ExecContext(ctx, `INSERT INTO reminders(user_id,transport,channel_id,content,due) VALUES(?,?,?,?,?)`, userID, transport, channelID, content, due.UTC().Format(time.RFC3339))
 	if err != nil {
 		return 0, err
 	}
@@ -492,7 +498,7 @@ func (s *Store) AddReminder(ctx context.Context, userID, channelID, content stri
 
 // DueReminders returns and marks done every reminder due by now.
 func (s *Store) DueReminders(ctx context.Context, now time.Time) ([]Reminder, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,user_id,channel_id,content,due FROM reminders WHERE done=0 AND due<=? ORDER BY due`, now.UTC().Format(time.RFC3339))
+	rows, err := s.db.QueryContext(ctx, `SELECT id,user_id,transport,channel_id,content,due FROM reminders WHERE done=0 AND due<=? ORDER BY due`, now.UTC().Format(time.RFC3339))
 	if err != nil {
 		return nil, err
 	}
@@ -500,7 +506,7 @@ func (s *Store) DueReminders(ctx context.Context, now time.Time) ([]Reminder, er
 	for rows.Next() {
 		var r Reminder
 		var due string
-		if err := rows.Scan(&r.ID, &r.UserID, &r.ChannelID, &r.Content, &due); err != nil {
+		if err := rows.Scan(&r.ID, &r.UserID, &r.Transport, &r.ChannelID, &r.Content, &due); err != nil {
 			rows.Close()
 			return nil, err
 		}
