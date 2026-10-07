@@ -30,7 +30,7 @@ func validWallpaperHost(raw string) bool {
 // something unsafe through this tool nor make up a URL.
 func Wallpaper() sdk.Tool {
 	return sdk.ToolFunc{S: sdk.ToolSpec{Name: "wallpaper", Heavy: true,
-		Description: "Find a real wallpaper image on wallhaven.cc and post it after your message. Use it ONLY when someone asks for a wallpaper or desktop background; for any other picture use image_search. Give short English search words (style, subject, mood), e.g. \"anime city night rain\". The image is attached for you; never paste or invent a link.",
+		Description: "Find a wallpaper on wallhaven.cc and attach it. Only for wallpapers or desktop backgrounds (otherwise image_search). Short English search words. Never paste or invent a link.",
 		Schema:      Schema([]string{"query"}, map[string][2]string{"query": {"string", "a few English search words, no more than 8"}})},
 		F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
 			var a struct{ Query string }

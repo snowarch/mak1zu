@@ -43,7 +43,7 @@ func ReactionGIF() sdk.Tool {
 		cats = append(cats, c)
 	}
 	return sdk.ToolFunc{S: sdk.ToolSpec{Name: "reaction_gif",
-		Description: "Send an anime reaction GIF after your message, for when a GIF says it better than words (hug, pat, bonk, facepalm, smug, cry, dance, stare...). Use sparingly, at most one per reply, and never as a substitute for answering. Categories: " + strings.Join(sortedKeys(gifCategories), ", ") + ".",
+		Description: "An anime reaction GIF after your message, sparingly, never instead of answering. Categories: " + strings.Join(sortedKeys(gifCategories), ", ") + ".",
 		Schema:      Schema([]string{"category"}, map[string][2]string{"category": {"string", "one of the listed categories"}})},
 		F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
 			var a struct{ Category string }

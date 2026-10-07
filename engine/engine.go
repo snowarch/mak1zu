@@ -46,8 +46,11 @@ type Engine struct {
 	Log   *slog.Logger
 
 	extra map[string]sdk.Transport // transports besides Tr, by name
-	mood  *persona.Mood
-	hooks []sdk.Hooks
+	work  workshop
+	// Tunable vets a dial she may change on request (wired by main from the panel schema).
+	Tunable func(path string, value any) (any, error)
+	mood    *persona.Mood
+	hooks   []sdk.Hooks
 
 	mu     sync.Mutex
 	seen   map[string]time.Time
@@ -83,6 +86,7 @@ func New(cfg *config.Store, llm Completer, mem *memory.Store, lib persona.Librar
 	}) {
 		e.Tools.Add(t)
 	}
+	e.registerWorkshop()
 	e.Tools.Add(tools.ReactionGIF())
 	e.Tools.Add(tools.Wallpaper())
 	e.Tools.Add(tools.ImageSearch())
@@ -390,7 +394,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	var reactions []string
 	var links []string
 	env := &sdk.CallEnv{
-		Transport: m.Transport, Speaker: sdk.Identity{ID: per.ID, Name: name}, ChannelID: m.ChannelID, GuildID: m.GuildID, IsDM: m.IsDM, Persona: pa.ID,
+		Transport: m.Transport, MessageID: m.ID, Speaker: sdk.Identity{ID: per.ID, Name: name}, ChannelID: m.ChannelID, GuildID: m.GuildID, IsDM: m.IsDM, Persona: pa.ID,
 		QueueFile: func(f sdk.File) { queued = append(queued, f) },
 		React:     func(x string) { reactions = append(reactions, x) },
 		AttachLink: func(u string) {

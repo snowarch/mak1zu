@@ -2,6 +2,7 @@ package panel
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/snowarch/mak1zu/config"
@@ -226,4 +227,61 @@ func leafPaths(prefix string, m map[string]any, out *[]string) {
 		}
 		*out = append(*out, p)
 	}
+}
+
+// tunableGroups are the dials she may turn when her owner asks in chat: how she
+// behaves, never where she lives or what she can reach.
+var tunableGroups = map[string]bool{"talk": true, "rhythm": true, "length": true, "brain": true, "memory": true}
+
+// Tunable says whether path is one of the dials she may change on request, and
+// returns the value clamped and typed as the dial expects it. Secrets, rooms,
+// the panel itself, providers and anything that needs a restart are never
+// tunable from chat, and neither is the kill switch.
+func Tunable(path string, value any) (any, error) {
+	for _, s := range Catalog {
+		if s.Path != path {
+			continue
+		}
+		if !tunableGroups[s.Group] || s.Restart || s.Kind == "secret" || path == "behavior.paused" {
+			return nil, fmt.Errorf("%s is not something she can change from chat; use the panel", path)
+		}
+		switch s.Kind {
+		case "toggle":
+			b, ok := value.(bool)
+			if !ok {
+				return nil, fmt.Errorf("%s is on or off (true or false)", path)
+			}
+			return b, nil
+		case "chance", "number", "seconds":
+			n, ok := value.(float64)
+			if !ok {
+				return nil, fmt.Errorf("%s is a number", path)
+			}
+			lo, hi := 0.0, 1.0
+			if s.Kind != "chance" {
+				lo, hi = -1e12, 1e12
+			}
+			if s.Min != nil {
+				lo = *s.Min
+			}
+			if s.Max != nil {
+				hi = *s.Max
+			}
+			if n < lo || n > hi {
+				return nil, fmt.Errorf("%s must be between %v and %v", path, lo, hi)
+			}
+			if s.Kind == "number" {
+				n = float64(int64(n))
+			}
+			return n, nil
+		case "text", "choice":
+			str, ok := value.(string)
+			if !ok || len(str) > 80 || strings.ContainsAny(str, "\n\r") {
+				return nil, fmt.Errorf("%s is a short single line of text", path)
+			}
+			return str, nil
+		}
+		return nil, fmt.Errorf("%s cannot be changed from chat", path)
+	}
+	return nil, fmt.Errorf("no such setting %q", path)
 }

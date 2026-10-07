@@ -31,14 +31,20 @@ type PreviewResult struct {
 // Preview answers as the active persona would, with the live rules, skills and
 // mood, but without tools, memory writes or any platform side effect.
 func (e *Engine) Preview(ctx context.Context, speaker string, convo []PreviewTurn) (PreviewResult, error) {
-	if len(convo) == 0 || convo[len(convo)-1].Role != "you" {
-		return PreviewResult{}, errors.New("say something first")
-	}
-	cfg := e.Cfg.Get()
 	pa, err := e.personaCfg()
 	if err != nil {
 		return PreviewResult{}, err
 	}
+	return e.PreviewAs(ctx, pa, speaker, convo)
+}
+
+// PreviewAs is Preview for any character, not only the active one: how a
+// persona she is about to adopt would answer.
+func (e *Engine) PreviewAs(ctx context.Context, pa persona.Persona, speaker string, convo []PreviewTurn) (PreviewResult, error) {
+	if len(convo) == 0 || convo[len(convo)-1].Role != "you" {
+		return PreviewResult{}, errors.New("say something first")
+	}
+	cfg := e.Cfg.Get()
 	if speaker = strings.TrimSpace(speaker); speaker == "" {
 		speaker = "You"
 	}

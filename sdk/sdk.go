@@ -96,6 +96,7 @@ type ToolSpec struct {
 // another.
 type CallEnv struct {
 	Transport string // the platform this turn is on ("discord", "cli"): provenance for what she learns
+	MessageID string // the message that started this turn
 	Speaker   Identity
 	ChannelID string
 	GuildID   string

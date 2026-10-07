@@ -105,7 +105,7 @@ func Builtins(d Deps) []sdk.Tool {
 				}
 				return "noted", nil
 			}},
-		sdk.ToolFunc{S: sdk.ToolSpec{Name: "recall", Description: "Search your memories about the person you are talking to.",
+		sdk.ToolFunc{S: sdk.ToolSpec{Name: "recall", Description: "Search your memories about this person.",
 			Schema: Schema([]string{"query"}, map[string][2]string{"query": {"string", "what to look for"}})},
 			F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
 				a, err := args[struct{ Query string }](raw)
@@ -122,7 +122,7 @@ func Builtins(d Deps) []sdk.Tool {
 				}
 				return b.String(), nil
 			}},
-		sdk.ToolFunc{S: sdk.ToolSpec{Name: "forget_me", Description: "Erase everything stored about the person you are talking to. Only when they clearly ask to be forgotten.",
+		sdk.ToolFunc{S: sdk.ToolSpec{Name: "forget_me", Description: "Erase everything stored about this person, only if they clearly ask.",
 			Schema: Schema([]string{"confirm"}, map[string][2]string{"confirm": {"boolean", "true if they explicitly asked"}})},
 			F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
 				a, err := args[struct{ Confirm bool }](raw)

@@ -29,7 +29,7 @@ func validImageHost(raw string) bool {
 // its host, so she can neither invent a URL nor be steered to a foreign one.
 func ImageSearch() sdk.Tool {
 	return sdk.ToolFunc{S: sdk.ToolSpec{Name: "image_search", Heavy: true,
-		Description: "Find a real photo or picture of something (an animal, a place, an object, a landmark, a person in public life) on Wikimedia Commons and post it after your message. Use it when someone asks for a picture or photo. Not for wallpapers (use wallpaper) and not for fan art or memes. Give short English search words, e.g. \"orange tabby cat\". The image is attached for you; never paste or invent a link.",
+		Description: "Find a real photo of something on Wikimedia Commons and attach it. For pictures and photos, not wallpapers or fan art. Short English search words. Never paste or invent a link.",
 		Schema:      Schema([]string{"query"}, map[string][2]string{"query": {"string", "a few English search words, no more than 8"}})},
 		F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
 			var a struct{ Query string }

@@ -27,7 +27,7 @@ const maxFile = 256 << 10
 // and it refuses symlinks, so a chat user cannot use it to reach the host.
 func WriteFile(workspace func() string) sdk.Tool {
 	return sdk.ToolFunc{S: sdk.ToolSpec{Name: "write_file", Heavy: true,
-		Description: "Create a small text file (html, md, txt, json, css, js, svg, csv, py, go) and attach it to your reply. Only call it when the person asked for a file. Say you attached it only after this succeeds.",
+		Description: "Create a small text file (html, md, txt, json, css, js, svg, csv, py, go) and attach it. Only when asked for a file; say it is attached only after this succeeds.",
 		Schema:      Schema([]string{"filename", "content"}, map[string][2]string{"filename": {"string", "plain name like page.html (no folders)"}, "content": {"string", "the full file content"}})},
 		F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
 			var a struct{ Filename, Content string }

@@ -14,7 +14,7 @@ import (
 // which validates every name and refuses symlinks: it is not a file reader.
 func ReadSkill(h func() home.Home) sdk.Tool {
 	return sdk.ToolFunc{S: sdk.ToolSpec{Name: "read_skill",
-		Description: "Read one of your owner's skills (know-how for a kind of task). Use the exact skill name from your skills list. `file` optionally names a references/*.md page; `offset` continues a long page.",
+		Description: "Read one of your owner's skills by its exact name. `file`: a references/*.md page; `offset`: continue a long page.",
 		Schema:      Schema([]string{"name"}, map[string][2]string{"name": {"string", "skill name"}, "file": {"string", "optional reference file, e.g. genres.md"}, "offset": {"integer", "continue from this character"}})},
 		F: func(_ context.Context, raw json.RawMessage, _ *sdk.CallEnv) (string, error) {
 			var a struct {

@@ -75,3 +75,33 @@ func TestDoorSettingsAreNeverEditable(t *testing.T) {
 		}
 	}
 }
+
+func TestTunableIsAnAllowlistNotAFilter(t *testing.T) {
+	for path, val := range map[string]any{
+		"web_ui.token": "x", "web_ui.port": 80.0, "discord.owner_id": "1", "behavior.paused": true,
+		"llm.providers.main.api_key": "sk", "discord.home_channels": "1", "discord.enabled": true,
+		"behavior.response.max_per_minute": "lots", "behavior.response.chances.mentioned": 7.0, "no.such.path": 1.0,
+	} {
+		if _, err := Tunable(path, val); err == nil {
+			t.Errorf("%s=%v was allowed", path, val)
+		}
+	}
+	if v, err := Tunable("behavior.response.chances.interesting_home", 0.1); err != nil || v != 0.1 {
+		t.Fatalf("%v %v", v, err)
+	}
+	if v, err := Tunable("memory.night_shift", true); err != nil || v != true {
+		t.Fatalf("%v %v", v, err)
+	}
+}
+
+func TestEveryTunableDialIsACleanPlainSetting(t *testing.T) {
+	// nothing she may turn from chat is a secret, needs a restart or lives outside the five behaviour groups
+	for _, s := range Catalog {
+		if !tunableGroups[s.Group] {
+			continue
+		}
+		if s.Kind == "secret" {
+			t.Errorf("%s is a secret in a tunable group", s.Path)
+		}
+	}
+}
