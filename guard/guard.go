@@ -23,8 +23,8 @@ func (v Verdict) String() string { return [...]string{"ok", "empty", "leak", "pr
 
 var (
 	thinkRe     = regexp.MustCompile(`(?is)<think(?:ing)?>.*?</think(?:ing)?>`)
-	envelopeRes = buildEnvelopeRes("relationship_with_speaker", "recalled_memories", "open_threads", "running_bits", "recent_failures", "tool_result", "context", "system")
-	danglingRe  = regexp.MustCompile(`(?im)^\s*</?(relationship_with_speaker|recalled_memories|open_threads|running_bits|recent_failures|tool_result|context|system)\b[^>]*>\s*$`)
+	envelopeRes = buildEnvelopeRes("relationship_with_speaker", "recalled_memories", "open_threads", "running_bits", "on_your_mind", "recent_failures", "tool_result", "context", "system")
+	danglingRe  = regexp.MustCompile(`(?im)^\s*</?(relationship_with_speaker|recalled_memories|open_threads|running_bits|on_your_mind|recent_failures|tool_result|context|system)\b[^>]*>\s*$`)
 	toolJSONRe  = regexp.MustCompile(`(?s)^\s*[\[{]\s*"?(tool|name|function|tool_calls?)"?\s*:.*[\]}]\s*$`)
 	ellipsisRe  = regexp.MustCompile(`\.{4,}`)
 	massMention = regexp.MustCompile(`@(everyone|here)`)

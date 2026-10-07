@@ -54,6 +54,8 @@ Usage:
   mak1zu doctor [--offline]    check config, persona, memory and make a real call to each provider
   mak1zu persona list|check    list personas / validate the active one
   mak1zu eval <inputs.txt>     score the active persona's voice on a list of inputs
+  mak1zu night [--dry-run]     run the night shift now: she goes over the last days, writes her diary, tidies
+                               what she knows and picks what to bring up (--dry-run stores nothing)
   mak1zu link [CODE]           make the terminal the same person as your Discord account: run /link there
                                for a code and pass it here, or run without a code to get one for the other side
   mak1zu service               print a systemd user unit
@@ -83,7 +85,7 @@ func main() {
 		cmdProviders()
 	case "service":
 		err = cmdService(*cfgPath)
-	case "run", "chat", "doctor", "persona", "eval", "link":
+	case "run", "chat", "doctor", "persona", "eval", "link", "night":
 		var st *config.Store
 		if st, err = loadConfig(*cfgPath); err != nil {
 			break
@@ -99,6 +101,8 @@ func main() {
 			err = cmdPersona(st, args[1:])
 		case "link":
 			err = cmdLink(st, args[1:])
+		case "night":
+			err = cmdNight(st, args[1:])
 		case "eval":
 			if len(args) < 2 {
 				err = errors.New("usage: mak1zu eval <inputs.txt>  (one message per line)")
@@ -442,6 +446,47 @@ func cmdChat(st *config.Store) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	return tr.Run(ctx, func(ctx context.Context, m sdk.Message) { e.Handle(ctx, m) })
+}
+
+// cmdNight runs the night shift once, now. --dry-run shows what she would
+// write and change without storing any of it.
+func cmdNight(st *config.Store, args []string) error {
+	dry := false
+	for _, a := range args {
+		if a == "--dry-run" {
+			dry = true
+		}
+	}
+	e, mem, _, err := build(st, idle{})
+	if err != nil {
+		return err
+	}
+	defer mem.Close()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	res, err := e.RunNight(ctx, engine.NightOpts{Dry: dry, Since: 72 * time.Hour})
+	if err != nil {
+		return err
+	}
+	if len(res) == 0 {
+		fmt.Println("nobody to think about: she has not talked with anyone twice in the last three days")
+	}
+	for _, r := range res {
+		fmt.Printf("\n== %s ==\n", r.Name)
+		if r.Err != nil {
+			fmt.Println("skipped:", r.Err)
+			continue
+		}
+		fmt.Println(r.Diary)
+		for _, u := range r.Unsaid {
+			fmt.Println("  on her mind:", u)
+		}
+		fmt.Printf("  threads closed %d, opened %d, duplicate memories dropped %d\n", r.Closed, r.Opened, r.Merged)
+	}
+	if dry {
+		fmt.Println("\n(dry run: nothing was stored)")
+	}
+	return nil
 }
 
 // cmdLink joins the terminal to the person you already are elsewhere, so there

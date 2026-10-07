@@ -124,6 +124,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	}
 	go e.reminderLoop(ctx)
 	go e.maintenanceLoop(ctx)
+	go e.nightLoop(ctx)
 	go func() { e.Sleep(ctx, 10*time.Second); e.Catchup(ctx) }()
 	return e.Tr.Run(ctx, func(ctx context.Context, m sdk.Message) { go e.Handle(ctx, m) })
 }
@@ -276,11 +277,13 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	for _, x := range mems {
 		memText = append(memText, describeMemory(x, e.Tr.Name(), time.Now()))
 	}
-	threads, bits := e.ledgerLines(ctx, pa.ID, per)
+	private := m.IsDM || e.isLocal() // what is about one person's life is only raised in private
+	threads, bits := e.ledgerLines(ctx, pa.ID, per, private)
+	onMind, mindIDs := e.mindLines(ctx, pa.ID, per, private)
 
 	pctx := persona.Context{
 		Now: time.Now().Format("Monday 2 January 2006, 15:04 MST"), Platform: e.Tr.Name(),
-		Speaker: name, Relationship: rel.Describe(), Memories: memText, Threads: threads, Bits: bits,
+		Speaker: name, Relationship: rel.Describe(), Memories: memText, Threads: threads, Bits: bits, OnMind: onMind,
 		LanguageHint: languageHint(cfg.Language),
 	}
 	if pa.Mood {
@@ -468,6 +471,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	e.mu.Unlock()
 	_ = e.Mem.LogTurn(ctx, pa.ID, per.ID, m.ChannelID, m.Content, final)
 	_, _ = e.Mem.NoteBitUse(ctx, pa.ID, per.ID, final, time.Now())
+	_ = e.Mem.MarkSaid(ctx, mindIDs) // she had her chance; she does not repeat it
 	for _, h := range hooks {
 		if h.AfterReply != nil {
 			h.AfterReply(ctx, m, final)

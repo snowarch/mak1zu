@@ -123,6 +123,9 @@ type Memory struct {
 	RecallLimit    int    `json:"recall_limit"`
 	MaintenanceHrs int    `json:"maintenance_hours"`
 	AutoExtract    bool   `json:"auto_extract"`
+	NightShift     bool   `json:"night_shift"`  // reflect on the day: diary, tidy-up, things to bring up
+	NightHour      int    `json:"night_hour"`   // local hour after which the night runs
+	NightPeople    int    `json:"night_people"` // at most this many people per night
 }
 
 type WebUI struct {
@@ -189,7 +192,7 @@ func Default() Config {
 			Retry:  true,
 		},
 		Discord: Discord{TokenEnv: "MAK1ZU_DISCORD_TOKEN", RegisterCommands: true},
-		Memory:  Memory{Path: "data/memory.db", RecallLimit: 6, MaintenanceHrs: 24, AutoExtract: true},
+		Memory:  Memory{Path: "data/memory.db", RecallLimit: 6, MaintenanceHrs: 24, AutoExtract: true, NightHour: 4, NightPeople: 4},
 		WebUI:   WebUI{Enabled: true, Host: "127.0.0.1", Port: 8787},
 	}
 }
@@ -278,6 +281,9 @@ func (c Config) Validate() error {
 		if p.Protocol != "" && p.Protocol != "chat" && p.Protocol != "responses" {
 			return fmt.Errorf("provider %q: unknown protocol %q", n, p.Protocol)
 		}
+	}
+	if c.Memory.NightHour < 0 || c.Memory.NightHour > 23 {
+		return fmt.Errorf("memory.night_hour must be 0-23")
 	}
 	if c.WebUI.Enabled && !isLoopback(c.WebUI.Host) && c.WebUI.Token == "" {
 		return fmt.Errorf("web_ui.token is required when host %q is not loopback", c.WebUI.Host)

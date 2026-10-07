@@ -431,6 +431,8 @@ func mergePersons(ctx context.Context, tx *sql.Tx, src, dst string) error {
 		`UPDATE OR IGNORE facts SET user_id=? WHERE user_id=?`,
 		`UPDATE threads SET person_id=? WHERE person_id=?`,
 		`UPDATE OR IGNORE bits SET person_id=? WHERE person_id=?`,
+		`UPDATE unsaid SET person_id=? WHERE person_id=?`,
+		`UPDATE OR IGNORE diary SET person_id=? WHERE person_id=?`,
 	} {
 		if err := exec(q, dst, src); err != nil {
 			return err
@@ -441,8 +443,10 @@ func mergePersons(ctx context.Context, tx *sql.Tx, src, dst string) error {
 			return err
 		}
 	}
-	if err := exec(`DELETE FROM bits WHERE person_id=?`, src); err != nil { // duplicates of dst's bits
-		return err
+	for _, q := range []string{`DELETE FROM bits WHERE person_id=?`, `DELETE FROM diary WHERE person_id=?`} { // what dst already had
+		if err := exec(q, src); err != nil {
+			return err
+		}
 	}
 
 	rows, err := tx.QueryContext(ctx, `SELECT persona,dynamic,familiarity,interactions,last_seen FROM relationships WHERE user_id=?`, src)

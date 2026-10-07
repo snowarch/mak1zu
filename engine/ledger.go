@@ -43,9 +43,12 @@ func describeMemory(m memory.Memory, here string, now time.Time) string {
 
 // ledgerLines are the open threads and the bits ready for a callback, as the
 // lines that go into the prompt. Small by construction: five threads, two bits.
-func (e *Engine) ledgerLines(ctx context.Context, personaID string, per memory.Person) (threads, bits []string) {
+func (e *Engine) ledgerLines(ctx context.Context, personaID string, per memory.Person, private bool) (threads, bits []string) {
 	now := time.Now()
-	ts, _ := e.Mem.OpenThreads(ctx, per.ID, 5)
+	var ts []memory.Thread
+	if private { // threads are about one person's life: not for a room full of bystanders
+		ts, _ = e.Mem.OpenThreads(ctx, per.ID, 5)
+	}
 	for _, t := range ts {
 		line := fmt.Sprintf("#%d %s", t.ID, t.Text)
 		if due, err := time.Parse(time.RFC3339, t.Due); err == nil {

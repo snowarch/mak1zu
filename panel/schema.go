@@ -133,6 +133,12 @@ var Catalog = []Setting{
 		Help: "How many things she remembers about the speaker are put in front of her each time."},
 	{Path: "memory.auto_extract", Group: "memory", Kind: "toggle", Label: "Learn by listening",
 		Help: "She notices durable facts people mention ('my cat is called Nube') and saves them. Off means she only remembers what she is told to."},
+	{Path: "memory.night_shift", Group: "memory", Kind: "toggle", Label: "Night shift",
+		Help: "Once a night she goes over the day with the people she actually talked to: tidies what she knows, closes what ended, writes a short private diary entry (they can read it with /diary) and decides what she'd like to bring up next time. Costs a few model calls a night, so it is off until you turn it on."},
+	{Path: "memory.night_hour", Group: "memory", Kind: "number", Min: f(0), Max: f(23), Unit: "h", Label: "Night shift starts at", Advanced: true,
+		Help: "Local hour after which the night runs, once a day. 4 means she reflects some time after 04:00."},
+	{Path: "memory.night_people", Group: "memory", Kind: "number", Min: f(1), Max: f(20), Label: "People per night", Advanced: true,
+		Help: "The most people she reflects on in one night, busiest first. Each is one model call, so this is your cost cap."},
 	{Path: "memory.maintenance_hours", Group: "memory", Kind: "number", Min: f(0), Max: f(720), Unit: "h", Label: "Tidy-up interval", Advanced: true,
 		Help: "How often she merges and prunes old memories. 0 turns it off."},
 

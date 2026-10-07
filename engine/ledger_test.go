@@ -41,13 +41,13 @@ func TestMemoryProvenanceShowsOnlyWhenItIsElsewhere(t *testing.T) {
 func TestLedgerReachesPromptAndBitRestsAfterCallback(t *testing.T) {
 	e, _, sc := setup(t, say("hey"), say("lol the toaster again"), say("fine"))
 	ctx := context.Background()
-	e.Handle(ctx, msg("1", "hi"))
+	e.Handle(ctx, dmFrom("1", "u1", "Alice", "hi"))
 	pid := personID(t, e, "u1")
 	e.Mem.AddThread(ctx, pid, "discord", "Alice's exam is thursday", time.Time{})
 	e.Mem.AddBit(ctx, "maki", pid, "discord", "the toaster incident", "toaster")
 	e.Mem.RememberFrom(ctx, "maki", memory.Semantic, pid, "cli", "Alice learn Go at night", 0.9, "")
 
-	e.Handle(ctx, msg("2", "so, what do I learn at night, and the exam"))
+	e.Handle(ctx, dmFrom("2", "u1", "Alice", "so, what do I learn at night, and the exam"))
 	sys := sc.reqs[len(sc.reqs)-1].System
 	for _, want := range []string{"<open_threads>", "exam is thursday", "<running_bits>", "the toaster incident", "told on cli"} {
 		if !strings.Contains(sys, want) {
@@ -55,20 +55,39 @@ func TestLedgerReachesPromptAndBitRestsAfterCallback(t *testing.T) {
 		}
 	}
 	// her reply used the bit: it must rest on the next turn
-	e.Handle(ctx, msg("3", "anything else?"))
+	e.Handle(ctx, dmFrom("3", "u1", "Alice", "anything else?"))
 	if strings.Contains(sc.reqs[len(sc.reqs)-1].System, "the toaster incident") {
 		t.Fatal("a bit she just used came straight back")
+	}
+}
+
+func dmFrom(id, author, name, text string) sdk.Message {
+	return sdk.Message{ID: id, ChannelID: "dm-" + author, AuthorID: author, AuthorName: name, Content: text, IsDM: true, Time: time.Now()}
+}
+
+func TestThreadsAreNotRaisedInAPublicRoom(t *testing.T) {
+	e, _, sc := setup(t, say("hi"))
+	ctx := context.Background()
+	e.Mem.Resolve(ctx, "discord", "u1", "Alice")
+	pid := personID(t, e, "u1")
+	e.Mem.AddThread(ctx, pid, "discord", "Alice's secret surgery", time.Time{})
+	e.Mem.AddUnsaid(ctx, "maki", pid, "ask how the surgery went", time.Hour)
+	e.Handle(ctx, msg("1", "hey")) // a guild channel full of bystanders
+	sys := sc.reqs[0].System
+	if strings.Contains(sys, "surgery") {
+		t.Fatalf("a private thread reached a public room's prompt:\n%s", sys)
+	}
+	if u, _ := e.Mem.PendingUnsaid(ctx, "maki", pid, time.Now()); len(u) != 1 {
+		t.Fatal("an unsaid item was spent on a room where it could not be said")
 	}
 }
 
 func TestAnotherPersonNeverSeesMyThreads(t *testing.T) {
 	e, _, sc := setup(t, say("a"), say("b"))
 	ctx := context.Background()
-	e.Handle(ctx, msg("1", "hi"))
+	e.Handle(ctx, dmFrom("1", "u1", "Alice", "hi"))
 	e.Mem.AddThread(ctx, personID(t, e, "u1"), "discord", "Alice's secret surgery", time.Time{})
-	b := msg("2", "hello")
-	b.AuthorID, b.AuthorName = "u2", "Bob"
-	e.Handle(ctx, b)
+	e.Handle(ctx, dmFrom("2", "u2", "Bob", "hello"))
 	if strings.Contains(sc.reqs[1].System, "surgery") {
 		t.Fatal("alice's thread reached bob's prompt")
 	}

@@ -131,7 +131,7 @@ func Open(path string) (*Store, error) {
 	if path == ":memory:" {
 		db.SetMaxOpenConns(1)
 	}
-	if _, err := db.Exec(schema + personSchema + ledgerSchema); err != nil {
+	if _, err := db.Exec(schema + personSchema + ledgerSchema + nightSchema); err != nil {
 		return nil, fmt.Errorf("memory schema: %w", err)
 	}
 	if err := migrate(db); err != nil {
@@ -332,6 +332,7 @@ func (s *Store) ForgetUser(ctx context.Context, userID string) error {
 		`DELETE FROM relationships WHERE user_id=?`, `DELETE FROM facts WHERE user_id=?`, `DELETE FROM turns WHERE user_id=?`, `DELETE FROM reminders WHERE user_id=?`,
 		`DELETE FROM accounts WHERE person_id=?`, `DELETE FROM link_codes WHERE person_id=?`,
 		`DELETE FROM threads WHERE person_id=?`, `DELETE FROM bits WHERE person_id=?`,
+		`DELETE FROM diary WHERE person_id=?`, `DELETE FROM unsaid WHERE person_id=?`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, userID); err != nil {
 			return err

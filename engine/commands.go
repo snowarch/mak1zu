@@ -63,6 +63,24 @@ func (e *Engine) Commands() []sdk.Command {
 			Run: func(ctx context.Context, c sdk.CommandCall) string {
 				return e.ledgerView(ctx, e.Cfg.Get().Persona.Active, e.account(ctx, c.UserID, c.UserName))
 			}},
+		{Name: "diary", Description: "Read what she wrote about you (only you can see this), or `clear` to delete it",
+			Options: []sdk.CommandOption{{Name: "what", Description: "`clear` to delete everything she wrote about you", Required: false}},
+			Run: func(ctx context.Context, c sdk.CommandCall) string {
+				per := e.account(ctx, c.UserID, c.UserName)
+				if strings.EqualFold(strings.TrimSpace(c.Args["what"]), "clear") {
+					_ = e.Mem.ClearDiary(ctx, per.ID)
+					return "deleted"
+				}
+				es, _ := e.Mem.Diary(ctx, e.Cfg.Get().Persona.Active, per.ID, 3)
+				if len(es) == 0 {
+					return "nothing written about you yet"
+				}
+				var b strings.Builder
+				for _, d := range es {
+					b.WriteString(d.Day + "\n" + d.Text + "\n\n")
+				}
+				return strings.TrimSpace(b.String())
+			}},
 		{Name: "callme", Description: "Tell her what to call you, on every platform you use",
 			Options: []sdk.CommandOption{{Name: "name", Description: "what she should call you (empty to reset)", Required: false}},
 			Run: func(ctx context.Context, c sdk.CommandCall) string {

@@ -55,8 +55,8 @@ func Builtins(d Deps) []sdk.Tool {
 				id, err := d.Mem.RememberFrom(ctx, d.Persona(), k, env.Speaker.ID, env.Transport, a.Content, 0.6, "")
 				return fmt.Sprintf("saved #%d", id), err
 			}},
-		sdk.ToolFunc{S: sdk.ToolSpec{Name: "set_profile", Description: "Save how the person you are talking to wants to be treated: what to call them, their pronouns, language, time zone, whether you may start conversations, quiet hours. Only what they told you about themselves, on every platform they use. An empty value clears it. If they ask you to stop checking in on them, set checkins off.",
-			Schema: Schema([]string{"field", "value"}, map[string][2]string{"field": {"string", "call_me, pronouns, language, tz, checkins (on/off: whether you may start conversations) or quiet (hours you must not message them, 23:00-08:00)"}, "value": {"string", "the value, e.g. Ren, they/them, Spanish, Europe/Madrid, off, 23:00-08:00"}})},
+		sdk.ToolFunc{S: sdk.ToolSpec{Name: "set_profile", Description: "Save how this person wants to be treated, as they told you. Empty value clears. \"Stop checking in on me\" means checkins off.",
+			Schema: Schema([]string{"field", "value"}, map[string][2]string{"field": {"string", "call_me, pronouns, language, tz, checkins (on/off) or quiet (23:00-08:00)"}, "value": {"string", "e.g. Ren, they/them, Europe/Madrid, off"}})},
 			F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
 				a, err := args[struct{ Field, Value string }](raw)
 				if err != nil {
@@ -67,8 +67,8 @@ func Builtins(d Deps) []sdk.Tool {
 				}
 				return "saved", nil
 			}},
-		sdk.ToolFunc{S: sdk.ToolSpec{Name: "open_thread", Description: "Note something still in flight in the person's life (an exam, a sick pet, a decision they are stuck on) so you can follow up later. Not for facts that are simply true.",
-			Schema: Schema([]string{"text"}, map[string][2]string{"text": {"string", "one short sentence"}, "due": {"string", "when it happens or is due, RFC3339 or YYYY-MM-DD, if known"}})},
+		sdk.ToolFunc{S: sdk.ToolSpec{Name: "open_thread", Description: "Note something still in flight in their life (exam, sick pet, a pending decision) to follow up on. Not for plain facts.",
+			Schema: Schema([]string{"text"}, map[string][2]string{"text": {"string", "one short sentence"}, "due": {"string", "YYYY-MM-DD if known"}})},
 			F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
 				a, err := args[struct{ Text, Due string }](raw)
 				if err != nil {
@@ -93,8 +93,8 @@ func Builtins(d Deps) []sdk.Tool {
 				}
 				return "closed", nil
 			}},
-		sdk.ToolFunc{S: sdk.ToolSpec{Name: "note_bit", Description: "Save a running bit: a joke, nickname or reference only the two of you share, worth calling back to later. Be sparing; most conversations produce none.",
-			Schema: Schema([]string{"text", "trigger"}, map[string][2]string{"text": {"string", "what the bit is and where it came from, one sentence"}, "trigger": {"string", "a short word or phrase that will appear in your reply when you call it back"}})},
+		sdk.ToolFunc{S: sdk.ToolSpec{Name: "note_bit", Description: "Save a running bit: a joke or nickname only you two share. Rare; most chats have none.",
+			Schema: Schema([]string{"text", "trigger"}, map[string][2]string{"text": {"string", "the bit and where it came from"}, "trigger": {"string", "a word that appears in your reply when you call it back"}})},
 			F: func(ctx context.Context, raw json.RawMessage, env *sdk.CallEnv) (string, error) {
 				a, err := args[struct{ Text, Trigger string }](raw)
 				if err != nil {
