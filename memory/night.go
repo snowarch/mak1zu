@@ -213,3 +213,115 @@ func (s *Store) MarkSaid(ctx context.Context, ids []int64) error {
 	}
 	return nil
 }
+
+// PersonSummary is one row of the panel's People tab.
+type PersonSummary struct {
+	Person
+	Accounts []Account
+	Memories int
+	Threads  int
+	Bits     int
+	Diary    int
+}
+
+// Summaries lists everyone she knows with what she holds on each, for the
+// owner's panel. It reads counts only; the detail view is Ledger.
+func (s *Store) Summaries(ctx context.Context) ([]PersonSummary, error) {
+	ps, err := s.Persons(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PersonSummary, 0, len(ps))
+	count := func(q, id string) int {
+		var n int
+		_ = s.db.QueryRowContext(ctx, q, id).Scan(&n)
+		return n
+	}
+	for _, p := range ps {
+		accs, _ := s.Accounts(ctx, p.ID)
+		out = append(out, PersonSummary{
+			Person: p, Accounts: accs,
+			Memories: count(`SELECT count(*) FROM memories WHERE user_id=?`, p.ID),
+			Threads:  count(`SELECT count(*) FROM threads WHERE person_id=? AND status='open'`, p.ID),
+			Bits:     count(`SELECT count(*) FROM bits WHERE person_id=?`, p.ID),
+			Diary:    count(`SELECT count(*) FROM diary WHERE person_id=?`, p.ID),
+		})
+	}
+	return out, nil
+}
+
+// AllMemories lists a person's memories across every character, newest first.
+func (s *Store) AllMemories(ctx context.Context, personID string, limit int) ([]Memory, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id,persona,kind,content,user_id,importance,score,tags,source,created,accessed,access_count FROM memories
+		WHERE user_id=? ORDER BY id DESC LIMIT ?`, personID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Memory
+	for rows.Next() {
+		var m Memory
+		var k string
+		if err := rows.Scan(&m.ID, &m.Persona, &k, &m.Content, &m.UserID, &m.Importance, &m.Score, &m.Tags, &m.Source, &m.Created, &m.Accessed, &m.Count); err != nil {
+			return nil, err
+		}
+		m.Kind = Kind(k)
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// AllDiary lists what she wrote about a person across every character.
+func (s *Store) AllDiary(ctx context.Context, personID string, limit int) ([]DiaryEntry, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id,day,text FROM diary WHERE person_id=? ORDER BY day DESC LIMIT ?`, personID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DiaryEntry
+	for rows.Next() {
+		var d DiaryEntry
+		if err := rows.Scan(&d.ID, &d.Day, &d.Text); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
+// AllBits lists a person's running bits across every character.
+func (s *Store) AllBits(ctx context.Context, personID string) ([]Bit, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id,text,trigger,origin,last_used,uses FROM bits WHERE person_id=? ORDER BY id`, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Bit
+	for rows.Next() {
+		var b Bit
+		if err := rows.Scan(&b.ID, &b.Text, &b.Trigger, &b.Origin, &b.LastUsed, &b.Uses); err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, rows.Err()
+}
+
+// PendingUnsaidAny is PendingUnsaid across every character, for the panel.
+func (s *Store) PendingUnsaidAny(ctx context.Context, personID string, at time.Time) ([]Unsaid, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id,text,created FROM unsaid WHERE person_id=? AND said='' AND expires>? ORDER BY id`,
+		personID, at.UTC().Format(time.RFC3339))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Unsaid
+	for rows.Next() {
+		var u Unsaid
+		if err := rows.Scan(&u.ID, &u.Text, &u.Created); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}

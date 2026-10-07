@@ -82,6 +82,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/events", s.eventsStream)
 	mux.HandleFunc("GET /api/events/recent", s.eventsRecent)
 	mux.HandleFunc("POST /api/preview", s.preview)
+	mux.HandleFunc("GET /api/people", s.peopleList)
+	mux.HandleFunc("GET /api/people/{id}", s.personDetail)
+	mux.HandleFunc("DELETE /api/people/{id}", s.personErase)
+	mux.HandleFunc("DELETE /api/people/{id}/{what}/{n}", s.personForget)
+	mux.HandleFunc("PUT /api/people/{id}/profile", s.personProfile)
 	mux.HandleFunc("POST /api/chat/say", s.chatSay)
 	mux.HandleFunc("POST /api/chat/command", s.chatCommand)
 	mux.HandleFunc("GET /api/chat/stream", s.chatStream)
@@ -183,8 +188,12 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	if !s.Started.IsZero() {
 		up = int64(time.Since(s.Started).Seconds())
 	}
+	herName := cfg.Persona.Active
+	if pa, err := s.Lib().Load(cfg.Persona.Active); err == nil && pa.Name != "" {
+		herName = pa.Name
+	}
 	writeJSON(w, 200, map[string]any{
-		"paused": cfg.Behavior.Paused, "mood": mood, "mood_state": ms, "face": Face(ms, cfg.Behavior.Paused, allDown(cfg, cool), s.lastMoment(), time.Now()), "has_avatar": s.Avatar != nil, "uptime_s": up, "version": s.Version,
+		"her_name": herName, "paused": cfg.Behavior.Paused, "mood": mood, "mood_state": ms, "face": Face(ms, cfg.Behavior.Paused, allDown(cfg, cool), s.lastMoment(), time.Now()), "has_avatar": s.Avatar != nil, "uptime_s": up, "version": s.Version,
 		"invite_url": InviteURL(cfg.Discord.BotToken(), false), "invite_url_expressions": InviteURL(cfg.Discord.BotToken(), true),
 		"checklist": Checklist(cfg), "activity": s.recentActivity(),
 		"config": cfg.Redacted(), "personas": s.Lib().List(), "active": cfg.Persona.Active,

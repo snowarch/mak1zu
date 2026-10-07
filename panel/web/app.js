@@ -14,18 +14,45 @@ const get=(o,p)=>p.split('.').reduce((a,k)=>a?.[k],o);
 function setPath(o,p,v){const ks=p.split('.');let c=o;for(const k of ks.slice(0,-1))c=c[k]??={};c[ks.at(-1)]=v}
 const ls={get(k){try{return localStorage.getItem(k)}catch{return null}},set(k,v){try{localStorage.setItem(k,v)}catch{}}};
 
-let S=null,SCHEMA=null,PRESETS=[],tab=(location.hash||'').slice(1)||ls.get('tab')||'live';
+let S=null,SCHEMA=null,PRESETS=[],tab=(location.hash||'').slice(1)||ls.get('tab')||'chat';
+/* [key, label, subtitle, icon]; a string in the list starts a group in the nav */
 const TABS=[
- ['live','Live','what she is doing right now, and why'],
- ['talk','Talk','try her out with the live persona and rules'],
- ['persona','Persona','who she is'],
- ['rules','House rules','rules, skills and notes for specific rooms'],
- ['models','Models','the brains behind her'],
- ['rooms','Rooms','where she lives on Discord'],
- ['dials','Dials','how she behaves. Every change applies instantly'],
- ['tools','Tools','what she can do besides talk'],
- ['memory','Memory & log','what she keeps, and what just happened'],
+ ['chat','Chat','talk to her, as yourself','chat'],
+ ['live','Live','what she is doing right now, and why','pulse'],
+ ['people','People','who she knows, and exactly what she keeps about each of them','people'],
+ 'Shape her',
+ ['persona','Persona','who she is','mask'],
+ ['talk','Test bench','try the persona and rules without touching memory','flask'],
+ ['rules','House rules','rules, skills and notes for specific rooms','scroll'],
+ ['models','Models','the brains behind her','chip'],
+ ['rooms','Rooms','where she lives on Discord','hash'],
+ ['dials','Dials','how she behaves. Every change applies instantly','sliders'],
+ ['tools','Tools','what she can do besides talk','wrench'],
+ 'Under the hood',
+ ['memory','Memory & log','what she keeps, and what just happened','book'],
 ];
+const TAB=TABS.filter(t=>typeof t!=='string');
+/* drawn once, one stroke weight: no glyphs standing in for icons */
+const ICONS={
+ chat:'<path d="M4 5.5h16v11H10l-4 3.5v-3.5H4z"/>',
+ pulse:'<path d="M3 12h4l2.5-6 4 12 2.5-6H21"/>',
+ people:'<circle cx="9" cy="8" r="3"/><path d="M3.5 19.5c0-3.6 2.4-5.5 5.5-5.5s5.5 1.9 5.5 5.5"/><circle cx="17" cy="9" r="2.2"/><path d="M17 14c2.6 0 3.8 1.6 3.8 4.2"/>',
+ mask:'<circle cx="12" cy="12" r="8.5"/><path d="M8.6 14.3c.9 1.4 2 2 3.4 2s2.5-.6 3.4-2"/><path d="M9 10h.01M15 10h.01"/>',
+ flask:'<path d="M9.5 3.5h5M10.5 3.5v5.2l-5 8.8a2 2 0 0 0 1.7 3h9.6a2 2 0 0 0 1.7-3l-5-8.8V3.5"/><path d="M8 14h8"/>',
+ scroll:'<path d="M6.5 4h11v16h-11z"/><path d="M9.5 8.5h5M9.5 12h5M9.5 15.5h3"/>',
+ chip:'<rect x="6.5" y="6.5" width="11" height="11" rx="2"/><path d="M9.5 3v3.5M14.5 3v3.5M9.5 17.5V21M14.5 17.5V21M3 9.5h3.5M3 14.5h3.5M17.5 9.5H21M17.5 14.5H21"/>',
+ hash:'<path d="M5 9h14M5 15h14M10 4 8.5 20M15.5 4 14 20"/>',
+ sliders:'<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+ wrench:'<path d="M14.6 6.4a4.2 4.2 0 0 0-5.3 5.3L4 17l3 3 5.3-5.3a4.2 4.2 0 0 0 5.3-5.3l-2.8 2.8-2.4-.6-.6-2.4z"/>',
+ book:'<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>',
+ x:'<path d="M6 6l12 12M18 6 6 18"/>',
+ up:'<path d="M6 14.5 12 8l6 6.5"/>',
+ check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+ alert:'<path d="M12 7.5v6M12 17h.01"/><circle cx="12" cy="12" r="9"/>',
+ send:'<path d="M5 12h13M13 6.5 18.5 12 13 17.5"/>',
+ file:'<path d="M7 3.5h7l4 4V20.5H7z"/><path d="M14 3.5v4h4"/>',
+};
+function ico(n,cls=''){const e=document.createElementNS('http://www.w3.org/2000/svg','svg');e.setAttribute('viewBox','0 0 24 24');e.setAttribute('class','ico '+cls);e.setAttribute('aria-hidden','true');e.innerHTML=ICONS[n]||'';return e}
 
 /* ---------- plumbing ---------- */
 function toast(m,err){const t=$('#toast');t.textContent=m;t.className=err?'err':'';t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',err?6500:2400)}
@@ -114,7 +141,6 @@ function settingsCard(id,{advanced=false}={}){
 
 /* ---------- live feed ---------- */
 const FEED=[];let lastEvt=0,feedFilter=sessionStorage.getItem('ff')||'all',liveState='connecting';
-const GLYPH={heard:'›',replied:'↳',quiet:'·',incident:'!',slip:'?',system:'~'};
 function matches(e){
   switch(feedFilter){
     case'replied':return e.type==='replied';
@@ -135,7 +161,7 @@ function feedRow(e){
   }else if(e.why&&e.type!=='system'){
     bits.push(h('span',{class:'why'},e.why));
   }
-  return h('div',{class:'ev '+e.type},h('div',{class:'t'},fmtTime(e.ts)),h('div',{class:'g'},GLYPH[e.type]||'·'),
+  return h('div',{class:'ev '+e.type},h('div',{class:'t'},fmtTime(e.ts)),h('div',{class:'g'}),
     h('div',{},who,txt?h('div',{class:'txt'},txt):'',e.type==='incident'&&e.text&&e.text!==txt?h('div',{class:'who mono'},e.text):'',bits));
 }
 let feedBox=null;
@@ -175,19 +201,19 @@ const views={};
 let onState=null;
 
 views.live=()=>{
-  const stats=h('div',{class:'stats'});
+  const stats=h('div',{class:'pulse'});
   const todo=h('div');
   const paint=()=>{
     const a=S.activity||{};
     stats.replaceChildren(
-      h('div',{class:'stat'},h('b',{},a.replied??0),h('span',{},'replies, last hour')),
-      h('div',{class:'stat'},h('b',{},a.heard??0),h('span',{},'times she was called in')),
-      h('div',{class:'stat'},h('b',{},a.quiet??0),h('span',{},'times she stayed quiet')),
-      h('div',{class:'stat'+(a.incidents?' bad':'')},h('b',{},a.incidents??0),h('span',{},'problems')));
+      h('span',{},h('b',{},a.replied??0),'replies in the last hour'),
+      h('span',{},h('b',{},a.heard??0),'times she was called in'),
+      h('span',{},h('b',{},a.quiet??0),'times she stayed quiet'),
+      h('span',{class:a.incidents?'bad':''},h('b',{},a.incidents??0),a.incidents===1?'problem':'problems'));
     const open=(S.checklist||[]).filter(s=>!s.ok);
     todo.replaceChildren(...(open.length?[h('div',{class:'card'},h('h3',{},'Before she can really live here'),
       h('p',{class:'lead'},'These are the things she is missing right now.'),
-      (S.checklist||[]).map(s=>h('div',{class:'check'+(s.ok?'':' todo')},h('span',{class:'mark'},s.ok?'✓':'✗'),h('div',{},s.text),
+      (S.checklist||[]).map(s=>h('div',{class:'check'+(s.ok?'':' todo')},h('span',{class:'mark'},ico(s.ok?'check':'alert')),h('div',{},s.text),
         s.ok?h('span'):h('button',{class:'btn tiny',onclick:()=>go(s.tab)},'fix'),s.fix?h('div',{class:'fix'},s.fix):'')))]:[]));
   };
   onState=paint;paint();
@@ -196,9 +222,123 @@ views.live=()=>{
     h('span',{id:'livebadge'}));
   feedBox=h('div',{class:'feed'});
   const rows=FEED.filter(matches).slice(-300).reverse().map(feedRow);
-  feedBox.append(...(rows.length?rows:[h('div',{class:'empty'},'Nothing yet. She will not start the conversation. Say something in a room she lives in, or try her in Talk.')]));
+  feedBox.append(...(rows.length?rows:[h('div',{class:'empty'},h('b',{},'Quiet so far.'),'Everything she hears and why she answers or stays silent shows up here as it happens. Say something in a room she lives in, or open Chat.')]));
   setTimeout(()=>setLive(liveState),0);
   return [todo,stats,bar,feedBox];
+};
+
+
+/* ---------- chat: the real conversation, as yourself ---------- */
+function ago(iso){
+  const d=(Date.now()-new Date(iso))/1000;if(!isFinite(d))return '';
+  if(d<20*3600)return 'today';if(d<44*3600)return 'yesterday';
+  if(d<14*86400)return Math.round(d/86400)+' days ago';if(d<60*86400)return Math.round(d/604800)+' weeks ago';
+  return Math.round(d/2592000)+' months ago';
+}
+async function download(name){
+  try{const r=await fetch('/api/chat/file/'+encodeURIComponent(name),{headers:authHeaders()});if(!r.ok)throw new Error(r.statusText);
+    const a=h('a',{href:URL.createObjectURL(await r.blob()),download:name});document.body.append(a);a.click();a.remove()}catch(e){toast('Could not fetch '+name+': '+e.message,1)}
+}
+views.chat=()=>{
+  const her=S.her_name||S.active;
+  const stream=h('div',{class:'stream',role:'log','aria-live':'polite'});
+  const box=h('textarea',{rows:1,'aria-label':'Message',placeholder:'Say something, or / for commands',
+    onkeydown:e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}},
+    oninput:()=>{box.style.height='auto';box.style.height=Math.min(160,box.scrollHeight)+'px'}});
+  let last='',typing=null,away=false;
+  const down=()=>{stream.scrollTop=stream.scrollHeight};
+  function line(kind,text,files){
+    typing?.remove();typing=null;
+    const el=h('div',{class:'line '+kind+(kind==='her'&&last!=='her'?' first':'')});
+    if(kind==='her'&&last!=='her')el.append(h('span',{class:'nm'},her));
+    el.append(text);
+    for(const f of files||[])el.append(h('div',{},h('a',{class:'file',href:'#',onclick:e=>{e.preventDefault();download(f)}},ico('file'),f)));
+    stream.append(el);last=kind;down();return el;
+  }
+  const note=(t,block)=>{typing?.remove();typing=null;stream.append(h('div',{class:'line note'+(block?' block':'')},t));last='note';down()};
+  const dots=()=>{if(typing)return;typing=h('div',{class:'typing3','aria-label':her+' is typing'},h('i'),h('i'),h('i'));stream.append(typing);down()};
+  async function send(){
+    const t=box.value.trim();if(!t)return;box.value='';box.style.height='auto';
+    if(t.startsWith('/')){
+      const[n,...r]=t.slice(1).split(' ');
+      if(n==='help'){note('/memories  /diary  /callme NAME  /link  /forget N  /remember TEXT  /mood','block');return}
+      try{const x=await api('POST','/api/chat/command',{name:n,arg:r.join(' ')});note(x.out||'done',true)}catch(e){note(e.message==='no such command'?'No such command. /help lists them.':e.message)}
+      return;
+    }
+    line('you',t);dots();
+    try{await api('POST','/api/chat/say',{text:t})}catch(e){typing?.remove();typing=null;note('Could not send: '+e.message)}
+  }
+  /* history first, then the live stream; whatever she said while the tab was closed arrives as backlog */
+  const ctrl=new AbortController();leave=()=>ctrl.abort();
+  (async()=>{
+    try{
+      const hist=await api('GET','/api/chat/history?n=40');
+      for(const m of hist)line(m.who==='her'?'her':'you',m.text);
+      if(!hist.length)stream.append(h('div',{class:'empty'},h('b',{},'Nothing said yet.'),'She is here. Say something, or try /memories to see what she already holds.'));
+      const r=await fetch('/api/chat/stream',{headers:authHeaders(),signal:ctrl.signal});
+      const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
+      for(;;){
+        const{value,done}=await rd.read();if(done)break;
+        buf+=dec.decode(value,{stream:true});let i;
+        while((i=buf.indexOf('\n\n'))>=0){
+          const l=buf.slice(0,i).split('\n').find(x=>x.startsWith('data: '));buf=buf.slice(i+2);if(!l)continue;
+          let ev;try{ev=JSON.parse(l.slice(6))}catch{continue}
+          stream.querySelector('.empty')?.remove();
+          if(ev.kind==='typing')dots();
+          else{
+            if(ev.kind==='backlog'&&!away){away=true;note('she wrote while you were away');last=''}
+            line('her',ev.text,ev.files);
+          }
+        }
+      }
+    }catch(e){if(e.name!=='AbortError')note('The connection to her dropped. Switch tabs and come back to reconnect.')}
+  })();
+  setTimeout(()=>box.focus(),0);
+  return [h('div',{class:'room'},stream,h('div',{class:'say'},box,h('button',{class:'send','aria-label':'Send',onclick:send},ico('send'))),
+    h('div',{class:'hint'},'Enter sends, Shift+Enter adds a line. This is you, the owner, on the local chat: what you tell her here she remembers everywhere you are linked.'))];
+};
+
+/* ---------- people: what she keeps, nothing hidden ---------- */
+views.people=async()=>{
+  const list=(await api('GET','/api/people'))||[];
+  const pane=h('div',{class:'pd'}),side=h('div',{class:'plist'});
+  let cur=ls.get('person');
+  const name=p=>p.CallMe||p.Name||p.ID;
+  const where=p=>[...new Set((p.Accounts||[]).map(a=>a.Transport==='local'||a.Transport==='cli'?'terminal':a.Transport))].join(' · ')||'no account';
+  const drawList=()=>side.replaceChildren(...list.map(p=>h('button',{class:p.ID===cur?'on':'',onclick:()=>{cur=p.ID;ls.set('person',cur);drawList();open()}},
+    h('b',{},name(p),p.Role==='owner'?h('span',{class:'pill'},'owner'):''),
+    h('small',{},where(p)+' · '+p.Memories+' memories'+(p.Threads?', '+p.Threads+' open':'')))));
+  const rm=(label,fn)=>h('button',{class:'ib','aria-label':label,title:label,onclick:async e=>{try{await fn();open()}catch(x){toast(x.message,1)}}},ico('x'));
+  async function open(){
+    if(!cur||!list.find(p=>p.ID===cur))cur=list[0]?.ID;
+    if(!cur){pane.replaceChildren(h('div',{class:'empty'},h('b',{},'She does not know anyone yet.'),'People show up here once she has actually talked with them. Overhearing a room does not count.'));return}
+    drawList();
+    const d=await api('GET','/api/people/'+encodeURIComponent(cur)),p=d.person;
+    for(const k of ['accounts','memories','threads','bits','diary','unsaid'])d[k]=d[k]||[];
+    const del=(what,n)=>api('DELETE','/api/people/'+encodeURIComponent(cur)+'/'+what+'/'+n);
+    const field=(k,label,ph)=>h('label',{},label,h('input',{type:'text',value:p[{call_me:'CallMe',pronouns:'Pronouns',language:'Language',tz:'TZ',quiet:'Quiet'}[k]]||'',placeholder:ph,
+      onchange:async e=>{try{await api('PUT','/api/people/'+encodeURIComponent(cur)+'/profile',{field:k,value:e.target.value});toast('Saved');const i=list.findIndex(x=>x.ID===cur);if(i>=0){const f=await api('GET','/api/people');list.splice(0,list.length,...f);drawList()}}catch(x){toast(x.message,1);open()}}}));
+    const sure=h('span',{class:'sure'});
+    const forget=()=>sure.replaceChildren(h('span',{class:'mut'},'Really forget '+name(p)+'? This cannot be undone.'),
+      h('button',{class:'btn danger tiny',onclick:async()=>{try{await api('DELETE','/api/people/'+encodeURIComponent(cur));toast('Forgotten');const f=await api('GET','/api/people');list.splice(0,list.length,...f);cur=null;open()}catch(x){toast(x.message,1)}}},'Yes, forget'),
+      h('button',{class:'btn tiny',onclick:()=>sure.replaceChildren(h('button',{class:'btn danger',onclick:forget},'Forget everything about '+name(p)))},'No'));
+    sure.replaceChildren(h('button',{class:'btn danger',onclick:forget},'Forget everything about '+name(p)));
+    const sec=(title,sub,rows,empty)=>h('section',{class:'psec'},h('h4',{},title,sub?h('small',{},sub):''),...(rows.length?rows:[h('p',{class:'mut',style:'margin:0 0 8px'},empty)]));
+    pane.replaceChildren(
+      h('h3',{},name(p)),
+      h('div',{class:'acct'},p.Role==='owner'?h('span',{class:'pill ok'},'owner'):'',...(d.accounts||[]).map(a=>h('span',{class:'pill',title:a.ExternalID},(a.Transport==='local'||a.Transport==='cli'?'terminal':a.Transport)+(a.Display?' · '+a.Display:'')))),
+      h('section',{class:'psec'},h('h4',{},'How they want to be treated',h('small',{},'she follows this on every platform')),
+        h('div',{class:'pfields'},field('call_me','What she calls them','their name'),field('pronouns','Pronouns','they/them'),field('language','Language','English'),field('tz','Time zone','Europe/Madrid'),field('quiet','Quiet hours (no messages)','23:00-08:00'),
+          h('div',{class:'tg'},h('label',{class:'switch'},h('input',{type:'checkbox',checked:p.Checkins!=='off',onchange:async e=>{try{await api('PUT','/api/people/'+encodeURIComponent(cur)+'/profile',{field:'checkins',value:e.target.checked?'on':'off'});toast(e.target.checked?'She may start conversations with them.':'She will not start conversations with them.')}catch(x){toast(x.message,1);open()}}}),h('span')),'She may write first'))),
+      sec('What she knows',d.memories.length+' kept',d.memories.map(m=>h('div',{class:'prow'},h('div',{},h('div',{class:'txt'},m.Content),h('div',{class:'by'},(m.Source?'told on '+(m.Source==='cli'||m.Source==='local'?'the terminal':m.Source)+', ':'')+ago(m.Created))),rm('Forget this',()=>del('memory',m.ID)))),'Nothing yet.'),
+      sec('Still in flight','things she follows up on, in private only',d.threads.map(t=>h('div',{class:'prow'},h('div',{class:'txt'},t.Text,t.Due?h('span',{class:'by'},'  due '+new Date(t.Due).toLocaleDateString()):''),rm('Close this',()=>del('thread',t.ID)))),'Nothing open.'),
+      sec('Running bits','jokes only the two of them share',d.bits.map(b=>h('div',{class:'prow'},h('div',{},h('div',{class:'txt'},b.Text),h('div',{class:'by'},b.Uses?'used '+b.Uses+' time'+(b.Uses===1?'':'s')+(b.LastUsed?', last '+ago(b.LastUsed):''):'not used yet')),rm('Drop this bit',()=>del('bit',b.ID)))),'None yet.'),
+      sec('Waiting to be said','what the night shift left on her mind',d.unsaid.map(u=>h('div',{class:'prow'},h('div',{class:'txt'},u.Text),'')),'Nothing waiting.'),
+      sec('Her diary','private notes in her own voice, newest first',d.diary.map(x=>h('div',{class:'prow diary'},h('div',{},h('div',{class:'by'},x.Day),h('div',{class:'txt'},x.Text)),'')).concat(d.diary.length?[h('div',{class:'actions'},h('button',{class:'btn tiny',onclick:async()=>{try{await del('diary',0);open()}catch(x){toast(x.message,1)}}},'Delete the diary'))]:[]),'Nothing written. The night shift writes these once a day, if you turn it on in Memory & log.'),
+      h('section',{class:'psec'},h('h4',{},'Forget'),h('p',{class:'lead'},'Erases every memory, thread, bit, diary entry and account link for this person.'),sure));
+  }
+  await open();
+  return [h('div',{class:'people'},side,pane)];
 };
 
 let convo=[];try{convo=JSON.parse(sessionStorage.getItem('convo')||'[]')}catch{}
@@ -274,8 +414,8 @@ function routeEditor(which,label){
     const sel=h('select',{style:'max-width:170px',onchange:e=>{if(e.target.value)save([...list,e.target.value])}},[h('option',{value:''},'add fallback…'),...free.map(n=>h('option',{value:n},n))]);
     wrap.replaceChildren(h('div',{},h('div',{class:'lbl'},label),h('div',{class:'help'},which==='text'?'The first healthy provider answers. If it fails, the next one takes over.':'Used when someone sends an image.')),
       h('div',{class:'ctl'},h('div',{class:'route'},list.map((n,i)=>h('span',{class:'chip'},(i+1)+'. '+n,
-        h('button',{title:'move up',onclick:()=>{if(i>0){const x=[...list];[x[i-1],x[i]]=[x[i],x[i-1]];save(x)}}},'▲'),
-        h('button',{title:'remove',onclick:()=>save(list.filter((_,j)=>j!==i))},'✕'))),sel)));
+        h('button',{title:'move up','aria-label':'move up',onclick:()=>{if(i>0){const x=[...list];[x[i-1],x[i]]=[x[i],x[i-1]];save(x)}}},ico('up')),
+        h('button',{title:'remove','aria-label':'remove',onclick:()=>save(list.filter((_,j)=>j!==i))},ico('x')))),sel)));
   };
   paint();return wrap;
 }
@@ -442,9 +582,10 @@ function faceEl(){
   return h('img',{class:'face',alt:'',src:'avatar/'+name+'.png?size=96',title:'she looks '+S.face,
     onerror:e=>{noArt.add(name);e.target.replaceWith(lamp())}});
 }
-async function go(t){tab=t;ls.set('tab',t);history.replaceState(null,'','#'+t);await render()}
+let leave=null; /* a view can register how to stop what it started */
+async function go(t){leave?.();leave=null;tab=t;ls.set('tab',t);history.replaceState(null,'','#'+t);await render()}
 function paintHeader(){
-  const t=TABS.find(x=>x[0]===tab)||TABS[0];
+  const t=TAB.find(x=>x[0]===tab)||TAB[0];
   $('#title').textContent=t[1];$('#sub').textContent=t[2];
   const off=!S.config.discord.enabled;
   const st=$('#state');st.className='state'+(S.paused?' paused':off?' off':'');
@@ -453,8 +594,9 @@ function paintHeader(){
   $('#ver').textContent=S.active+' · v'+(S.version||'dev');
   $('#foot').textContent='up '+fmtUp(S.uptime_s||0);
   const open=(S.checklist||[]).filter(x=>!x.ok).length;
-  const nav=$('#nav');nav.replaceChildren(...TABS.map(([k,l],i)=>h('button',{class:k===tab?'on':'',onclick:()=>go(k)},h('i',{},String(i+1).padStart(2,'0')),l,
-    (k==='live'&&open)?h('span',{class:'dot',title:open+' thing(s) to set up'}):'')));
+  const nav=$('#nav');nav.replaceChildren(...TABS.map(t=>typeof t==='string'?h('div',{class:'grp'},t):
+    h('button',{class:t[0]===tab?'on':'','aria-current':t[0]===tab?'page':null,onclick:()=>go(t[0])},ico(t[3]),t[1],
+    (t[0]==='live'&&open)?h('span',{class:'dot',title:open+' thing(s) to set up'}):'')));
 }
 async function render(){
   paintHeader();feedBox=null;onState=null;
