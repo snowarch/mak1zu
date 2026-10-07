@@ -181,3 +181,19 @@ func TestBridgedHumanWebhookIsAPersonButARealBotIsNot(t *testing.T) {
 		t.Fatal("a real bot got an account")
 	}
 }
+
+func TestOnePersonsBadMoodIsNotWornByEveryoneElse(t *testing.T) {
+	e, _, sc := setup(t, say("a"), say("b"), say("c"), say("d"), say("e"), say("f"), say("g"), say("h"), say("i"))
+	ctx := context.Background()
+	rude := "this is awful and broken, i hate this, terrible, so annoying"
+	for i := 0; i < 8; i++ {
+		e.Handle(ctx, dmFrom("r"+string(rune('a'+i)), "u1", "Alice", rude))
+	}
+	if !strings.Contains(sc.reqs[len(sc.reqs)-1].System, "irritated") {
+		t.Fatalf("eight rude messages should sour her toward alice:\n%s", sc.reqs[len(sc.reqs)-1].System)
+	}
+	e.Handle(ctx, dmFrom("b1", "u2", "Bob", "hi, how are you"))
+	if strings.Contains(sc.reqs[len(sc.reqs)-1].System, "irritated") {
+		t.Fatal("alice's rudeness made her irritated at bob")
+	}
+}

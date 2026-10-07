@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/snowarch/mak1zu/memory"
+	"github.com/snowarch/mak1zu/persona"
 	"github.com/snowarch/mak1zu/sdk"
 )
 
@@ -127,4 +128,21 @@ func (e *Engine) profileNotes(per memory.Person, rel memory.Relationship, m sdk.
 		out = append(out, fmt.Sprintf("You do not know what %s wants to be called (you only have their account name). When it fits, ask once, casually, what they would like you to call them; when they answer, save it with set_profile. Do not ask again if they brush it off.", per.Name))
 	}
 	return out
+}
+
+// moodFor is how she feels about one person. Mood is per person: the global
+// one (what the panel shows, what /mood says) is her overall state, but what
+// colours a reply is how things are with whoever she is answering.
+func (e *Engine) moodFor(personID string) *persona.Mood {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.pmood == nil {
+		e.pmood = map[string]*persona.Mood{}
+	}
+	m := e.pmood[personID]
+	if m == nil {
+		m = persona.NewMood()
+		e.pmood[personID] = m
+	}
+	return m
 }

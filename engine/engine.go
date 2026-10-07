@@ -47,6 +47,7 @@ type Engine struct {
 
 	extra map[string]sdk.Transport // transports besides Tr, by name
 	work  workshop
+	pmood map[string]*persona.Mood // how she feels about each person, by person id
 	// Tunable vets a dial she may change on request (wired by main from the panel schema).
 	Tunable func(path string, value any) (any, error)
 	mood    *persona.Mood
@@ -322,6 +323,9 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 	rel, _ := e.Mem.Relationship(ctx, pa.ID, per.ID)
 	mems, _ := e.Mem.Recall(ctx, pa.ID, per.ID, m.Content, cfg.Memory.RecallLimit)
 	name := per.Display() // the name they chose, else their platform name
+	if pa.Mood {          // how she feels about THIS person: someone else's bad day is not theirs to wear
+		e.moodFor(per.ID).Observe(name, m.Content, m.Mentioned || m.IsDM)
+	}
 	var memText []string
 	for _, x := range mems {
 		memText = append(memText, describeMemory(x, m.Transport, time.Now()))
@@ -340,7 +344,7 @@ func (e *Engine) turn(ctx context.Context, m sdk.Message, reason Reason, pa pers
 		LanguageHint: languageHint(cfg.Language),
 	}
 	if pa.Mood {
-		pctx.Mood = e.mood.Describe()
+		pctx.Mood = e.moodFor(per.ID).Describe()
 	}
 	if m.IsDM {
 		pctx.Place = "a private DM with " + name
