@@ -1,7 +1,9 @@
 # Security
 
-Report vulnerabilities privately to the maintainers (do not open a public issue
-for a live exploit).
+Report vulnerabilities privately through GitHub: the repository's **Security**
+tab → **Report a vulnerability**. Please do not open a public issue for a live
+exploit. Include what you did, what you expected and what happened; a failing
+test is the best report.
 
 ## Threat model
 

@@ -1,0 +1,10 @@
+name: Idea
+description: A feature, a provider preset, a transport, a tool
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to be able to do?
+      description: Start from the problem. If it is a provider preset, say how you checked the model id (see CONTRIBUTING).
+    validations: { required: true }
