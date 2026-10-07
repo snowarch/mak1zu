@@ -17,7 +17,7 @@ import (
 
 // cmdEval replays a file of inputs (one per line) against the active persona
 // and the real provider, then prints the same voice metrics VOICE.md measured
-// on the original companion, so a persona edit can be judged with numbers instead of vibes.
+// on a real companion, so a persona edit can be judged with numbers instead of vibes.
 func cmdEval(st *config.Store, path string) error {
 	cfg := st.Get()
 	pa, err := persona.Library{Dir: st.Abs(cfg.Persona.Dir)}.Load(cfg.Persona.Active)

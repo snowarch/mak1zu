@@ -1,7 +1,7 @@
 # .makizu
 
 This folder is her. Everything here is plain Markdown you can edit by hand or
-from the panel (**Persona** and **Rules & skills** tabs). She re-reads it on
+from the panel (**Persona** and **House rules** tabs). She re-reads it on
 every message, so changes apply without a restart.
 
 | Path | What it is |

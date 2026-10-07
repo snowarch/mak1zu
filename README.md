@@ -1,43 +1,55 @@
-<p align="center"><img src="brand/png/banner-eclipse.png" alt="Mak1zu" width="100%"></p>
+<p align="center"><img src="brand/png/banner.png" alt="Mak1zu" width="100%"></p>
 
 <p align="center"><b>The companion you shape.</b><br>
-A Go engine for a Discord-native AI companion with memory, a real personality, a web control panel and an SDK. Linux first, any distro, one static binary.</p>
+A Go engine for a Discord companion that remembers people, has a real personality, and runs from one static binary on any Linux distro.</p>
 
 ---
 
-Mak1zu comes from a private companion I built and ran for months in a Discord community, talking with real people every day. This is the first time any of it is public. Everything that made her feel like a *person* (short replies, opinions, callbacks, bad days, remembering you, not sounding like customer support) is encoded here as measured rules and tested code, so you can give yours **any** personality on top of a solid base. See [docs/VOICE.md](docs/VOICE.md).
+Most chatbots sound like customer support wearing a costume. Mak1zu is built the other way round: a shared layer of rules for how people actually type in chat (short, opinionated, imperfect), a small Markdown file for who the character is, and a guard that strips the tells. The numbers behind those rules come from measuring thousands of real replies; they are in [docs/VOICE.md](docs/VOICE.md).
+
+The default character is **Maki**: flat and dry on the surface, shy underneath. Swap her for anyone by editing one file.
 
 ## What you get
 
-- **Servers and DMs**, with per-channel rules: home channels where she talks freely, mention-only rooms where she only wakes on a real `@mention`, owner-only DMs, bounded banter with sister bots.
-- **Memory that stays private.** SQLite + full-text search, per-person relationships (familiarity, dynamic, inside jokes), reminders, "forget me". One person's memory never reaches another's prompt. Tested.
-- **A voice, not a chatbot.** Shared human-writing substrate + a small character file. Output guard removes leaks, protocol, tics (no more 164 `*stares*` in a row), loops and customer-support tells.
-- **Any model.** OpenAI-compatible `chat` and `responses` protocols, ordered fallbacks, circuit breaker, vision routing, reasoning headroom. Local (Ollama, llama.cpp) or hosted.
-- **Web panel** on `127.0.0.1:8787`: edit models, routing, behavior, channels and the persona file; changes apply live; test a provider with a real call; secrets are write-only.
-- **SDK**: tools and hooks in ~20 lines, transports in 5 methods, personas in Markdown, and any MCP server as a tool source. [docs/SDK.md](docs/SDK.md)
-- **Reaction GIFs** from a fixed list of feelings (hug, bonk, smug, facepalm...), never a link she makes up.
-- **Slash commands**: `/persona` (owner), `/mood`, `/remember`, `/memories`, `/forget`, `/ping`.
-- **Voice eval**: `mak1zu eval examples/eval-inputs.txt` scores a persona on length, tics and robotic tells.
-- **Honest failures**: one useful line in the person's language, a silent retry for transient errors, and a promise audit that catches "done, attached!" when nothing was attached.
+- **Servers and DMs, with house rules per room.** Home channels where she talks freely, mention-only channels where only a real `@mention` wakes her, owner-only DMs.
+- **Memory that stays with the person.** SQLite with full-text search: what you told her, how she relates to you, inside jokes, reminders, `forget me`. One person's memory never reaches another person's prompt; a test proves it.
+- **Any model.** OpenAI-compatible `chat` and `responses` protocols, ordered fallbacks, a circuit breaker, vision routing. Free tiers, paid hosts and local models all work: [docs/PROVIDERS.md](docs/PROVIDERS.md).
+- **A web panel** on `127.0.0.1:8787`: live feed of what she heard and why she stayed quiet, models, rooms, dials, her personality file. Changes apply instantly; keys are write-only.
+- **A guard on every reply.** No leaked prompts, no tool protocol, no `*stares*` ten times in a row, no "I'd be happy to help". A reply that promises an attachment and has none is caught.
+- **Extensible.** Tools and hooks in about 20 lines of Go, any [MCP](https://modelcontextprotocol.io) server as a tool source, transports in five methods, personalities in Markdown. [docs/SDK.md](docs/SDK.md)
+- **Slash commands:** `/persona` (owner), `/mood`, `/remember`, `/memories`, `/forget`, `/ping`.
 
 ## Quick start
 
 ```bash
-go install github.com/snowarch/mak1zu/cmd/mak1zu@latest   # or: make build
-mak1zu init ~/mak1zu && cd ~/mak1zu   # pick a provider, paste the key (hidden), done
-mak1zu doctor           # a real call to your provider; if it fails, it says what to fix
-mak1zu chat             # talk to her in the terminal first
-mak1zu run              # Discord + panel at http://127.0.0.1:8787
-mak1zu service          # prints a hardened systemd user unit
+git clone https://github.com/snowarch/mak1zu && cd mak1zu
+make install         # builds and copies mak1zu to ~/.local/bin
+mkdir ~/mak1zu && cd ~/mak1zu
+mak1zu init          # pick a provider, paste the key (hidden)
+mak1zu doctor        # one real call; if it fails, it says what to fix
+mak1zu chat          # try her in the terminal
+mak1zu run           # Discord + panel at http://127.0.0.1:8787
 ```
 
-Providers: OpenAI, Anthropic, Gemini, OpenRouter, Groq, DeepSeek, Mistral, opencode Go, and local Ollama or LM Studio (no key). Scripts: `mak1zu init --provider ollama`. Keys live in `.makizu/.env` (read automatically, never printed). Anything else that speaks the OpenAI API works by editing `base_url` and `model`.
+Needs Go 1.27+. Putting her in a Discord server takes a bot token and one intent switch: [docs/SETUP.md](docs/SETUP.md) walks through it.
 
-Discord setup: create a bot, enable **Message Content Intent**, invite it, set `discord.enabled`, `discord.owner_id`, and your channel IDs (as text) in the panel.
+### Which model?
+
+No card, no money:
+
+| | Where | Catch |
+| --- | --- | --- |
+| `openrouter-free` | [OpenRouter](https://openrouter.ai/keys) `:free` models | 20 requests a minute and a daily cap; free endpoints may train on your prompts |
+| `cline` | [Cline](https://app.cline.bot) API keys | free models rotate and have a quota |
+| `ollama`, `lmstudio` | your own machine | slower, and nothing ever leaves it |
+
+Cheap and good: `opencode-go` (a subscription to open-weight models; works from any client), `deepseek`, `gemini`, `groq`. Also `openai`, `anthropic`, `mistral`, `openrouter`, `opencode-zen`.
+
+One thing worth knowing before you go looking: opencode Zen's *free* models only work inside the OpenCode app and answer `403` from anywhere else, even with a key. Go and paid Zen models work. The details, the commands to list each provider's models, and what each error means are in [docs/PROVIDERS.md](docs/PROVIDERS.md). `mak1zu providers` prints the same table in your terminal, and `mak1zu init --provider <id>` skips the menu.
 
 ## Make her yours: the `.makizu/` folder
 
-`mak1zu init` creates a `.makizu/` folder (like a `.git`, found by walking up from where you run it). It *is* her: plain Markdown you edit by hand or in the panel, re-read on every message, no restart needed.
+`mak1zu init` creates `.makizu/`, found like a `.git` by walking up from where you run things. It is her: plain Markdown you edit by hand or in the panel, re-read on every message, no restart.
 
 ```
 .makizu/
@@ -45,21 +57,23 @@ Discord setup: create a bot, enable **Message Content Intent**, invite it, set `
   rules/10-care.md             house rules, always in her prompt
   servers/<server-id>.md       rules for one server
   channels/<channel-id>.md     rules for one channel
-  skills/anime-recs/SKILL.md   know-how she reads on demand (description + body + references/)
-  config.json  .env  data/     settings, secrets, memory (never committed)
+  skills/anime-recs/SKILL.md   know-how she reads on demand
+  config.json  .env  data/     settings, secrets, memory (never commit these)
 ```
 
-Add a skill by creating a folder with a `SKILL.md`; add a character by copying [docs/PERSONA_TEMPLATE.md](docs/PERSONA_TEMPLATE.md). Rules and skills outrank her habits and moods, never her hard lines. Details in [.makizu/README.md](.makizu/README.md).
+Add a character by copying [docs/PERSONA_TEMPLATE.md](docs/PERSONA_TEMPLATE.md), then `mak1zu eval examples/eval-inputs.txt` and read what she says. Add a skill by creating a folder with a `SKILL.md`. Rules and skills outrank her moods but never her hard lines. [.makizu/README.md](.makizu/README.md) has the details.
 
 ## Docs
 
-[Architecture](docs/ARCHITECTURE.md) · [SDK](docs/SDK.md) · [Voice study](docs/VOICE.md) · [Research](docs/RESEARCH.md) · [Security](docs/SECURITY.md) · [Roadmap](ROADMAP.md) · [Brand](brand/README.md)
+[Setup](docs/SETUP.md) · [Providers](docs/PROVIDERS.md) · [Architecture](docs/ARCHITECTURE.md) · [SDK](docs/SDK.md) · [Voice study](docs/VOICE.md) · [Security](docs/SECURITY.md) · [Research](docs/RESEARCH.md) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Brand](brand/README.md)
 
 ## Develop
 
 ```bash
-make test        # go test -race ./...  (offline, ~2 s)
+make test        # go test -race ./...  (offline, a few seconds)
 make build       # static, CGO-free binary in bin/
 ```
 
-Apache-2.0, with a [NOTICE](NOTICE): if you redistribute or modify Mak1zu, keep the notice and credit "Based on Mak1zu by snowarch". The name and artwork in `brand/` are not covered by the license; see [brand/README.md](brand/README.md).
+## License
+
+Apache-2.0 with a [NOTICE](NOTICE): if you redistribute or modify Mak1zu, keep the notice and credit "Based on Mak1zu by snowarch". The name and artwork in `brand/` are not covered by the license: see [brand/README.md](brand/README.md).

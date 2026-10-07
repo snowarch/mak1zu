@@ -9,9 +9,10 @@ What we checked, what we chose, and why. Dated 2026-10-06.
   cross-compilation, which is exactly "Linux first, distro-agnostic".
 - **No CGO** is a hard rule (CI enforces `CGO_ENABLED=0`). That is what makes
   the binary run on glibc, musl, NixOS and containers alike.
-- Release plan: `goreleaser` tarballs for linux/amd64+arm64 (Raspberry Pi is a
-  realistic home for a companion), an AUR package, a Nix flake, a `.deb`/`.rpm`
-  via nfpm, and a distroless container for people who want one.
+- Release plan: `goreleaser` tarballs for linux/amd64+arm64 (a Raspberry Pi is a
+  realistic home for a companion), `.deb`/`.rpm`/Arch packages via nfpm, an AUR
+  recipe (`packaging/arch/PKGBUILD`) and a distroless container. The configs exist
+  and stay unbuilt until the first tagged release; a Nix flake is still to do.
 
 ## Storage: SQLite, pure Go
 
@@ -47,7 +48,12 @@ What we checked, what we chose, and why. Dated 2026-10-06.
 - Reasoning models spend completion tokens on thinking and can return an empty
   visible reply. `reasoning_headroom` adds budget; an empty completion is a
   classified failure (`KindEmpty`), not a silent blank message. This was a real
-  production bug in the original companion.
+  production bug.
+- Models drift faster than docs. OpenAI's newer models refuse `max_tokens` and
+  any non-default `temperature`; Gemini and DeepSeek retire model ids on a
+  schedule. The client learns parameter refusals from the 400 and `doctor` reports
+  retired models with the provider's own list. Presets and the free-tier
+  landscape are in [PROVIDERS.md](PROVIDERS.md).
 - Router: ordered fallbacks per route (text / vision), a circuit breaker per
   provider, and one rule that mattered in production: if every candidate is
   open, try them anyway.
@@ -58,16 +64,16 @@ What we checked, what we chose, and why. Dated 2026-10-06.
 
 - **Three extension tiers**, in increasing isolation:
   1. Compile-time Go plugins (`sdk.Plugin`): fastest, trusted code.
-  2. **MCP servers** as tools (planned): the official `modelcontextprotocol/go-sdk`
-     reached 1.0 with a no-breaking-changes guarantee and is at 1.8 as of this
-     writing, so Mak1zu can consume any MCP server's tools without us owning a
-     plugin ABI. That is the right answer to "expandible and easy": people
+  2. **MCP servers** as tools (shipped, `mcpclient`): the official
+     `modelcontextprotocol/go-sdk` reached 1.0 with a no-breaking-changes
+     guarantee and is at 1.8 as of this writing, so Mak1zu consumes any MCP
+     server's tools without us owning a plugin ABI. That is the right answer to "expandible and easy": people
      already write MCP servers in any language.
   3. Persona packs: Markdown files, zero code.
 - Go's native `plugin` package is not an option (same toolchain/flags required,
   no Windows, brittle) and out-of-process gRPC plugins are heavier than MCP.
-- Hard rule from a security audit of the original companion: **no tool reads the
-  host filesystem or runs shell from chat**. A shell helper that could read
+- Hard rule from a security audit of an earlier bot: **no tool reads the host
+  filesystem or runs shell from chat**. A shell helper that could read
   arbitrary files once exposed a config holding a token; the fix was removing
   path-taking tools entirely.
 

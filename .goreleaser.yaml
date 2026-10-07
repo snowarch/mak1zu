@@ -10,7 +10,7 @@ builds:
     ldflags: ["-s -w -X main.version={{.Version}}"]
 archives:
   - formats: [tar.gz]
-    files: [README.md, LICENSE, NOTICE, docs/PERSONA_TEMPLATE.md, ".makizu/{README.md,personas,rules,skills,servers,channels}/**/*"]
+    files: [README.md, LICENSE, NOTICE, "docs/*.md", ".makizu/{README.md,personas,rules,skills,servers,channels}/**/*"]
 nfpms:
   - package_name: mak1zu
     formats: [deb, rpm, archlinux]
