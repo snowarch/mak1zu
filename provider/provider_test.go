@@ -165,6 +165,44 @@ func TestLearnsCompletionTokensAndTemperatureFromARefusal(t *testing.T) {
 	}
 }
 
+func TestLearnsProtocolFromARefusal(t *testing.T) {
+	var chatCalls, respCalls int
+	s := srv(t, func(p string, b map[string]any) (int, string) {
+		if p == "/responses" {
+			respCalls++
+			return 400, `{"type":"error","error":{"type":"ModelProtocolUnsupported","message":"Model does not support this protocol."}}`
+		}
+		chatCalls++
+		return 200, `{"choices":[{"message":{"content":"fine"}}]}`
+	})
+	defer s.Close()
+	cfg := config.Provider{Enabled: true, BaseURL: s.URL, Model: "responses-only-1", Protocol: "responses"}
+	r, err := NewHTTP("a", cfg).Complete(context.Background(), Request{Messages: []Message{{Role: User, Content: "hi"}}})
+	if err != nil || r.Text != "fine" || respCalls != 1 || chatCalls != 1 {
+		t.Fatalf("%+v %v resp=%d chat=%d", r, err, respCalls, chatCalls)
+	}
+	if _, err := NewHTTP("a", cfg).Complete(context.Background(), Request{}); err != nil || respCalls != 1 {
+		t.Fatalf("second client did not start informed: resp=%d %v", respCalls, err)
+	}
+}
+
+func TestLearnsToDropReasoningEffortFromARefusal(t *testing.T) {
+	var calls int
+	s := srv(t, func(_ string, b map[string]any) (int, string) {
+		calls++
+		if b["reasoning_effort"] != nil {
+			return 400, `{"error":{"type":"server_error","message":"Upstream request failed: [400] Invalid request parameters"}}`
+		}
+		return 200, `{"choices":[{"message":{"content":"fine"}}]}`
+	})
+	defer s.Close()
+	cfg := config.Provider{Enabled: true, BaseURL: s.URL, Model: "no-reasoning-1", ReasoningEffort: "minimal"}
+	r, err := NewHTTP("a", cfg).Complete(context.Background(), Request{Messages: []Message{{Role: User, Content: "hi"}}})
+	if err != nil || r.Text != "fine" || calls != 2 {
+		t.Fatalf("%+v %v calls=%d", r, err, calls)
+	}
+}
+
 func TestOtherBadRequestsAreNotRetried(t *testing.T) {
 	var calls int
 	s := srv(t, func(string, map[string]any) (int, string) {

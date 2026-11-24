@@ -83,7 +83,7 @@ curl -s https://opencode.ai/zen/go/v1/models | jq -r '.data[].id'
 
 Go is built for coding agents, and its docs say traffic is monitored for abuse and that clients should send their own `User-Agent` and a stable `x-opencode-session`, which Mak1zu does. A chat companion is not typical coding-agent traffic, so read [their terms](https://opencode.ai/docs/go) before you lean on it. Usage limits are dollar amounts per 5 hours, week and month, shared across models.
 
-Two things to know: some Go models only speak the `responses` protocol (set `"protocol": "responses"` for those), and `minimax-m3` thinks out loud inside `<think>` tags, which Mak1zu strips.
+Two things to know: some Go models only speak the `responses` protocol (`glm-5.3-flash` is the other way, chat only). Mak1zu tries the configured protocol and, if the model refuses it, retries the other one once and remembers it, so you normally do not have to set it. `minimax-m3` thinks out loud inside `<think>` tags, which Mak1zu strips.
 
 **Zen** (`opencode-zen`, `https://opencode.ai/zen/v1`) is pay-as-you-go. Its price list has several models marked Free. I called `big-pickle` and `nemotron-3-ultra-free` from Mak1zu on 2026-10-07, with and without a valid key and the session header: both returned `403 FreeTierError: OpenCode's free tier can only be used from within OpenCode`. Two more free ids were already dead (`mimo-v2.5-free` answers 410 deprecated, `deepseek-v4-flash-free` answers 400 unavailable). Mak1zu does not pretend to be the OpenCode app to get around that, and you should not need to. If you want Zen, add credits and use a paid model. I did not run a paid Zen model, because my test key is a Go key. GPT models on Zen use `/responses`, so set `"protocol": "responses"` for them.
 

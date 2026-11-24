@@ -86,6 +86,8 @@ func explain(err error, c config.Provider) Diagnosis {
 		return Diagnosis{Problem: host + " wants a session header", Fix: "add it under headers for this provider"}
 	case pe.Kind == KindEmpty:
 		return Diagnosis{Problem: "the model answered with nothing visible (it spent the budget thinking)", Fix: "raise reasoning_headroom, or lower reasoning_effort"}
+	case strings.Contains(low, "protocol") && (strings.Contains(low, "not support") || strings.Contains(low, "unsupported")):
+		return Diagnosis{Problem: "model " + c.Model + " does not speak the configured protocol at " + host, Fix: "set protocol to the other one (\"chat\" or \"responses\") for this provider; the panel's Models tab has the switch"}
 	case pe.Status == 404 && !strings.Contains(low, "model") && pathless(c.BaseURL):
 		return Diagnosis{Problem: "nothing at " + c.BaseURL + "/chat/completions (404)", Fix: "base_url has no path; almost every server wants it to end in /v1, so try " + strings.TrimRight(c.BaseURL, "/") + "/v1"}
 	case pe.Status == 404 || strings.Contains(low, "model"):

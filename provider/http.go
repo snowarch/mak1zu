@@ -50,30 +50,28 @@ func (h *HTTP) Complete(ctx context.Context, r Request) (Response, error) {
 	if r.HasImages() && !h.Cfg.Vision {
 		return Response{}, &Error{Kind: KindUnsupported, Provider: h.Name, Msg: "provider has no vision"}
 	}
-	path := "/chat/completions"
-	if h.Cfg.Protocol == "responses" {
-		path = "/responses"
-	}
 	var data []byte
 	var status int
-	// retry only while the provider keeps telling us a new parameter it dislikes
+	// retry only while the provider keeps telling us something it dislikes
 	for attempt := 0; ; attempt++ {
+		path := h.path()
+		body := h.body(path, r)
 		var err *Error
-		status, data, err = h.post(ctx, path, h.body(path, r))
+		status, data, err = h.post(ctx, path, body)
 		if err != nil {
 			return Response{}, err
 		}
 		if status < 300 {
 			break
 		}
-		if attempt < 2 && status == http.StatusBadRequest && h.learn(data) {
+		if attempt < 2 && status == http.StatusBadRequest && h.learn(data, body) {
 			continue
 		}
 		return Response{}, &Error{Kind: classify(status, data), Provider: h.Name, Status: status, Msg: scrub(snippet(data), h.Cfg.Key())}
 	}
 	var out Response
 	var err error
-	if h.Cfg.Protocol == "responses" {
+	if h.protocol() == "responses" {
 		out, err = parseResponses(data)
 	} else {
 		out, err = parseChat(data)
@@ -107,6 +105,10 @@ func (h *HTTP) body(path string, r Request) map[string]any {
 	}
 	if q&quirkNoTemperature != 0 {
 		delete(b, "temperature")
+	}
+	if q&quirkNoReasoning != 0 {
+		delete(b, "reasoning_effort")
+		delete(b, "reasoning")
 	}
 	for k, v := range h.Cfg.ExtraBody {
 		b[k] = v
@@ -147,6 +149,8 @@ func (h *HTTP) post(ctx context.Context, path string, body map[string]any) (int,
 const (
 	quirkCompletionTokens = 1 << iota // wants max_completion_tokens, not max_tokens
 	quirkNoTemperature                // only accepts its default temperature
+	quirkSwapProtocol                 // the model only speaks the other protocol
+	quirkNoReasoning                  // rejects reasoning_effort / reasoning
 )
 
 var learnedQuirks sync.Map // "base_url|model" -> int
@@ -159,8 +163,30 @@ func (h *HTTP) learned() int {
 	return q
 }
 
+// protocol is the configured one until the endpoint refuses it, then the other.
+func (h *HTTP) protocol() string {
+	p := h.Cfg.Protocol
+	if p != "responses" {
+		p = "chat"
+	}
+	if h.learned()&quirkSwapProtocol != 0 {
+		if p == "responses" {
+			return "chat"
+		}
+		return "responses"
+	}
+	return p
+}
+
+func (h *HTTP) path() string {
+	if h.protocol() == "responses" {
+		return "/responses"
+	}
+	return "/chat/completions"
+}
+
 // learn reads a 400 body and reports whether it taught us something new.
-func (h *HTTP) learn(body []byte) bool {
+func (h *HTTP) learn(body []byte, sent map[string]any) bool {
 	low := strings.ToLower(string(body))
 	have, add := h.learned(), 0
 	if strings.Contains(low, "max_completion_tokens") {
@@ -168,6 +194,13 @@ func (h *HTTP) learn(body []byte) bool {
 	}
 	if strings.Contains(low, "temperature") {
 		add |= quirkNoTemperature
+	}
+	if strings.Contains(low, "protocol") && (strings.Contains(low, "not support") || strings.Contains(low, "unsupported")) {
+		add |= quirkSwapProtocol
+	}
+	if (sent["reasoning_effort"] != nil || sent["reasoning"] != nil) &&
+		(strings.Contains(low, "reasoning") || strings.Contains(low, "invalid request parameters")) {
+		add |= quirkNoReasoning
 	}
 	if add&^have == 0 {
 		return false

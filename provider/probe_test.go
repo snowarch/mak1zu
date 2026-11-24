@@ -87,6 +87,15 @@ func TestProbeExplainsFailures(t *testing.T) {
 	}
 }
 
+func TestExplainNamesProtocolMismatch(t *testing.T) {
+	d := explain(&Error{Kind: KindBadRequest, Status: 400,
+		Msg: `{"type":"error","error":{"type":"ModelProtocolUnsupported","message":"Model does not support this protocol."}}`},
+		probeCfg("https://host.example/v1"))
+	if !strings.Contains(d.Problem, "protocol") || d.Fix == "" {
+		t.Fatalf("%+v", d)
+	}
+}
+
 func TestProbeSuggestsRealModels(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/models") {
