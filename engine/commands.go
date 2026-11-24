@@ -94,7 +94,7 @@ func (e *Engine) Commands() []sdk.Command {
 				}
 				return "okay, " + n
 			}},
-		{Name: "link", Description: "Join this account to you elsewhere (terminal, other platform): run with no code to get one, or paste a code",
+		{Name: "link", Description: "Link this account to you elsewhere: run with no code to get one, or paste a code",
 			Options: []sdk.CommandOption{{Name: "code", Description: "a code from another platform", Required: false}},
 			Run: func(ctx context.Context, c sdk.CommandCall) string {
 				per := e.account(ctx, e.callTransport(c), c.UserID, c.UserName)

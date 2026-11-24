@@ -14,7 +14,7 @@ Short on purpose: what changed for the person using her, one line each, newest f
 - **A voice you can measure.** `mak1zu eval --gate` fails when she drifts; `mak1zu persona distill` learns a character from a chat export; `persona pack` / `install` share characters as folders.
 - **Mood is per person.** One rude evening is not worn by everyone.
 - **Any OpenAI-compatible endpoint** in `init`, with a model picker and a live check; local servers are detected.
-- **Fixes.** Bridged webhooks count as people; a reply to a slow request no longer dies with the request.
+- **Fixes.** Bridged webhooks count as people; a reply to a slow request no longer dies with the request; when a model refuses the configured protocol or a stale `reasoning_effort`, Mak1zu retries without it instead of failing (and `doctor` names the real cause instead of blaming the model); Discord slash commands register reliably (shortened `/link` description within Discord's 100-char limit, logged and retried registration errors, UTF-8 safe ephemeral truncation); `FireReminders` passes through `guard.Clean`; first-run chat after `init` loads `.makizu/.env`.
 
 ## First public state
 

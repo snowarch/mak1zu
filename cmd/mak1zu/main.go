@@ -265,7 +265,7 @@ func cmdInitArgs(args []string) error {
 	}
 	if w.ui != nil && ch.Works { // a real terminal and a model that answered: do not make them type the next command
 		if yes, err := w.ui.confirm("say hi to her now?"); err == nil && yes {
-			st, err := config.Load(filepath.Join(dir, ".makizu", "config.json"))
+			st, err := loadConfig(filepath.Join(dir, ".makizu", "config.json"))
 			if err != nil {
 				return err
 			}

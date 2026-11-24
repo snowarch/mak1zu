@@ -54,7 +54,7 @@ In any other channel she answers when mentioned, replied to or called by name, a
 mak1zu run
 ```
 
-Open `http://127.0.0.1:8787`. The first-run checklist on the **Live** tab shows what is still missing, and once the token is in it builds the **invite link** for you. Open it, pick a server you manage, authorize. She appears online.
+Open `http://127.0.0.1:8787`. The first-run checklist on the **Live** tab shows what is still missing, and once the token is in the **Rooms** tab builds the **invite link** for you. Open it, pick a server you manage, authorize. She appears online.
 
 Everything in the panel applies live and writes `config.json` for you: models, rooms, behavior dials, her personality file, house rules. Secrets are write-only there.
 
@@ -95,6 +95,6 @@ The binary updates itself on `make install`, but your `.makizu/` folder is yours
 | --- | --- |
 | She is online but never replies | Message Content Intent is off, or the channel is mention-only and nobody mentioned her. The **Live** tab shows every message she ignored and why. |
 | `mak1zu doctor` fails on the provider | Read the fix line. [PROVIDERS.md](PROVIDERS.md#when-it-breaks) has the common ones. |
-| Slash commands do not show up | Discord can take a minute to publish global commands. `discord.register_commands` must be on. |
+| Slash commands do not show up | Discord can take a minute to publish global commands. `discord.register_commands` must be on, and the bot must be invited with the `applications.commands` scope (the panel's invite link includes it). Check `mak1zu run` logs for `register slash commands failed`. |
 | She answers twice | Two instances share one token. Stop the other one. |
 | She sounds like customer support | Fix the persona file, not the code: [PERSONA_TEMPLATE.md](PERSONA_TEMPLATE.md). |

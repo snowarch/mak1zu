@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/snowarch/mak1zu/guard"
 	"github.com/snowarch/mak1zu/memory"
 	"github.com/snowarch/mak1zu/persona"
 	"github.com/snowarch/mak1zu/provider"
@@ -35,15 +36,23 @@ func (e *Engine) FireReminders(ctx context.Context, now time.Time) {
 		return
 	}
 	pa, perr := e.personaCfg()
+	cfg := e.Cfg.Get()
 	for _, r := range due {
 		text := "reminder: " + r.Content
 		if perr == nil {
 			sys := persona.Compose(pa, persona.Context{Now: now.Format(time.RFC1123), Extra: []string{"You promised to remind someone. Do it now in one short natural line. The reminder: " + r.Content}})
-			if resp, err := e.LLM.Complete(ctx, provider.Request{System: sys, Messages: []provider.Message{{Role: provider.User, Content: "[system: reminder is due]"}}, MaxTokens: 120}); err == nil && strings.TrimSpace(resp.Text) != "" {
-				text = strings.TrimSpace(resp.Text)
+			if resp, err := e.LLM.Complete(ctx, provider.Request{System: sys, Messages: []provider.Message{{Role: provider.User, Content: "[system: reminder is due]"}}, MaxTokens: 120}); err == nil {
+				if cleaned, v := guard.Clean(resp.Text); v == guard.OK {
+					text = guard.LimitEmojis(cleaned, cfg.Behavior.Turn.EmojiBudget)
+				}
 			}
 		}
-		_ = e.tr(r.Transport).Send(ctx, r.ChannelID, sdk.Reply{Text: text})
+		if cleaned, v := guard.Clean(text); v == guard.OK {
+			text = cleaned
+		}
+		if err := e.tr(r.Transport).Send(ctx, r.ChannelID, sdk.Reply{Text: text}); err != nil {
+			e.Log.Warn("reminder send failed", "err", err)
+		}
 	}
 }
 

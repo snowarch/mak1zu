@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"sync"
@@ -20,11 +21,13 @@ import (
 )
 
 type Transport struct {
-	s       *discordgo.Session
-	self    sdk.Identity
-	mu      sync.RWMutex
-	chNames map[string]string
-	pending []*discordgo.ApplicationCommand
+	s         *discordgo.Session
+	self      sdk.Identity
+	appID     string
+	mu        sync.RWMutex
+	chNames   map[string]string
+	pending   []*discordgo.ApplicationCommand
+	overwrite func(appID string, defs []*discordgo.ApplicationCommand) error // test seam
 }
 
 func New(token string) (*Transport, error) {
@@ -46,10 +49,17 @@ func (t *Transport) Self() sdk.Identity { t.mu.RLock(); defer t.mu.RUnlock(); re
 
 func (t *Transport) Run(ctx context.Context, h sdk.Handler) error {
 	t.s.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
+		appID := r.User.ID
+		if r.Application != nil && r.Application.ID != "" {
+			appID = r.Application.ID
+		}
 		t.mu.Lock()
 		t.self = sdk.Identity{ID: r.User.ID, Name: r.User.Username}
+		t.appID = appID
 		t.mu.Unlock()
-		_ = t.flushCommands()
+		if err := t.flushCommands(); err != nil {
+			slog.Error("discord: register slash commands failed", "err", err)
+		}
 	})
 	t.s.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if m.Author == nil {

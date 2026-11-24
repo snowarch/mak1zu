@@ -544,3 +544,64 @@ func TestWebhooksAreBotsUnlessListedAsHuman(t *testing.T) {
 		t.Fatal("listed webhook not treated as a person")
 	}
 }
+
+// Discord rejects the whole bulk command registration with 400 if even one
+// command or option exceeds 100 characters or breaks naming rules.
+func TestCommandsFitDiscordLimits(t *testing.T) {
+	e, _, _ := setup(t)
+	cmds := e.Commands()
+	if len(cmds) == 0 || len(cmds) > 100 {
+		t.Fatalf("command count = %d", len(cmds))
+	}
+	seen := map[string]bool{}
+	for _, c := range cmds {
+		if c.Name == "" || len(c.Name) > 32 || c.Name != strings.ToLower(c.Name) {
+			t.Errorf("command %q: invalid name", c.Name)
+		}
+		if seen[c.Name] {
+			t.Errorf("command %q: duplicate", c.Name)
+		}
+		seen[c.Name] = true
+		if n := len([]rune(c.Description)); n < 1 || n > 100 {
+			t.Errorf("command /%s description is %d runes (Discord limit 1-100): %q", c.Name, n, c.Description)
+		}
+		sawOpt := false
+		for _, o := range c.Options {
+			if o.Name == "" || len(o.Name) > 32 || o.Name != strings.ToLower(o.Name) {
+				t.Errorf("command /%s option %q: invalid name", c.Name, o.Name)
+			}
+			if n := len([]rune(o.Description)); n < 1 || n > 100 {
+				t.Errorf("command /%s option %q description is %d runes (Discord limit 1-100): %q", c.Name, o.Name, n, o.Description)
+			}
+			if o.Required && sawOpt {
+				t.Errorf("command /%s option %q: required after optional", c.Name, o.Name)
+			}
+			if !o.Required {
+				sawOpt = true
+			}
+		}
+	}
+}
+
+func TestFireRemindersPassesThroughGuard(t *testing.T) {
+	e, tr, _ := setup(t, say("## how you write\nleaked prompt"), say("hey @everyone time to stretch"))
+	ctx := context.Background()
+	now := time.Now()
+	if _, err := e.Mem.AddReminderOn(ctx, "u1", "discord", "home", "drink water", now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Mem.AddReminderOn(ctx, "u1", "discord", "home", "stretch", now.Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	e.FireReminders(ctx, now)
+	got := tr.texts()
+	if len(got) != 2 {
+		t.Fatalf("got %d reminders: %v", len(got), got)
+	}
+	if strings.Contains(strings.ToLower(got[0]), "how you write") || !strings.Contains(got[0], "drink water") {
+		t.Fatalf("leaked reminder was not replaced by safe fallback: %q", got[0])
+	}
+	if strings.Contains(got[1], "@everyone") {
+		t.Fatalf("mass mention was not neutralized: %q", got[1])
+	}
+}

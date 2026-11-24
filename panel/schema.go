@@ -148,7 +148,7 @@ var Catalog = []Setting{
 	{Path: "tools.disabled", Group: "tools", Kind: "lines", Label: "Switched-off tools",
 		Help: "Tool names she must not use, one per line. The Tools tab lists what exists."},
 	{Path: "search.searxng_url", Group: "tools", Kind: "text", Label: "Web search server",
-		Help: "URL of your SearXNG instance. Empty means she has no web search."},
+		Help: "URL of your own SearXNG instance (tried first). Empty uses keyless search (Exa, DuckDuckGo, Bing)."},
 
 	{Path: "web_ui.hide_messages", Group: "panel", Kind: "toggle", Label: "Hide what people say",
 		Help: "Keeps message text out of the live feed. You still see who she answered and why. Useful when sharing your screen."},
