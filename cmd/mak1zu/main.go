@@ -382,7 +382,11 @@ func build(st *config.Store, tr sdk.Transport) (*engine.Engine, *memory.Store, *
 	}
 	router := provider.NewRouter(st.Get)
 	e := engine.New(st, router, mem, persona.Library{Dir: st.Abs(cfg.Persona.Dir)}, tr)
-	e.Tel = telemetry.New(500, filepath.Join(filepath.Dir(st.Abs(cfg.Memory.Path)), "telemetry.jsonl"))
+	telPath := ""
+	if memPath := st.Abs(cfg.Memory.Path); memPath != "" && memPath != ":memory:" {
+		telPath = filepath.Join(filepath.Dir(memPath), "telemetry.jsonl")
+	}
+	e.Tel = telemetry.New(500, telPath)
 	e.Tunable = panel.Tunable
 	return e, mem, router, nil
 }

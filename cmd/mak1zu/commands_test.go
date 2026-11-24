@@ -23,7 +23,7 @@ func TestEngineCommandsPassDiscordValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := config.Default()
-	cfg.Memory.Path = ":memory:"
+	cfg.Memory.Path = filepath.Join(root, "data", "memory.db")
 	st := config.New(filepath.Join(root, "config.json"), cfg)
 	e, mem, _, err := build(st, idle{})
 	if err != nil {
